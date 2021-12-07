@@ -1,8 +1,8 @@
 """script for mesh and convergence figure plots"""
 
 import os
-
-from expProcessing_functions import read_exp_data
+import numpy as np
+from expProcessing_functions import read_exp_data, butter_lowpass, butter_lowpass_filter, kinematics_processing, force_processing
 
 #-------------input plot control----------
 #-----------------------------------------
@@ -12,14 +12,12 @@ exp_data_list = [
 ]
 #-----------------------------------------
 #-----------------------------------------
-time_to_plot = 'all'
-coeffs_show_range = 'all'
-time_to_plot = [4.0, 5.0]
-show_range_cl = [-0.2, 2.5]
-show_range_cd = [-1.2, 2.8]
-cycle_time = 1.0
+range_time = 'all'
+range_value = 'all'
+cycle_time = 1000.0
 #---------------------------------------
-show_range = [show_range_cl, show_range_cd]
+legends = ['t750_air', 't750_water']
+show_range_kinematics = [range_time, range_value]
 #-----------------------------------------
 cwd = os.getcwd()
 data_dir = os.path.join(os.path.dirname(cwd), 'test_data')
@@ -34,5 +32,20 @@ for datai in exp_data_list:
             expDatai = read_exp_data(exp_data_filei)
             data_array.append(expDatai)
 
-print(data_array)
 #---------------------------------------
+# Filter requirements.
+order = 6
+fs = 100.0  # sample rate, Hz
+cutoff = 10  # desired cutoff frequency of the filter, Hz
+#----------------------------------------------
+# Get the filter coefficients so we can check its frequency response.
+sos, b, a = butter_lowpass(cutoff, fs, order=order)
+
+kinematics_arr_processed = kinematics_processing(data_array, legends,
+                                                 show_range_kinematics,
+                                                 image_out_path, cycle_time,
+                                                 cutoff, b, a, fs, order)
+force_arr_processed = force_processing(data_array, legends,
+                                       show_range_kinematics, image_out_path,
+                                       cycle_time, cutoff, b, a, fs, order,
+                                       'yes')

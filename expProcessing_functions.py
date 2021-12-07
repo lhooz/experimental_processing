@@ -9,6 +9,7 @@ import matplotlib.path as path
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import UnivariateSpline
+from scipy.signal import butter, sosfilt, lfilter, freqz
 
 
 def read_exp_data(expDataFile):
@@ -59,8 +60,39 @@ def read_exp_data(expDataFile):
     return expData
 
 
-def cf_plotter(data_array, legends, time_to_plot, show_range, image_out_path,
-               cycle_time, pt, plot_mode):
+def butter_lowpass(cutoff, fs, order=5):
+    """lowpass filtering design"""
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    sos = butter(order, normal_cutoff, btype='low', analog=False, output='sos')
+    b, a = butter(order, normal_cutoff, btype='low', analog=False, output='ba')
+
+    return sos, b, a
+
+
+def butter_lowpass_filter(data, cutoff, fs, order=5):
+    """applying filter to exp data"""
+    sos, b, a = butter_lowpass(
+        cutoff,
+        fs,
+        order=order,
+    )
+    ysos = sosfilt(sos, data)
+    yba = lfilter(b, a, data)
+    return ysos, yba
+
+
+def kinematics_processing(data_array,
+                          legends,
+                          show_range_kinematics,
+                          image_out_path,
+                          cycle_time,
+                          cutoff,
+                          b,
+                          a,
+                          fs,
+                          order,
+                          plot_frequencyResponse='no'):
     """
     function to plot cfd force coefficients results
     """
@@ -81,106 +113,165 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, image_out_path,
         'figure.subplot.wspace': 0.1,
         'figure.subplot.hspace': 0.1,
     })
+
+    if plot_frequencyResponse == 'yes':
+        # Plot the frequency response.
+        fig0, axs = plt.subplots(1, 1)
+        w, h = freqz(b, a, worN=8000)
+        axs.plot(0.5 * fs * w / np.pi, np.abs(h), 'b')
+        axs.plot(cutoff, 0.5 * np.sqrt(2), 'ko')
+        axs.axvline(cutoff, color='k')
+        axs.set_xlim(0, 0.5 * fs)
+        plt.title("Lowpass Filter Frequency Response")
+        axs.set_xlabel('Frequency [Hz]')
+        axs.grid()
+        # plt.show()
+
+        title = 'refquency respose'
+        out_image_file = os.path.join(image_out_path, title + '.svg')
+        fig0.savefig(out_image_file)
+
     legendx = 0.5
     legendy = 1.15
 
-    cf_array = np.array(data_array)
-    range_cl = show_range[0]
-    range_cd = show_range[1]
+    noOfCases = len(legends)
+    range_time = show_range_kinematics[0]
+    range_value = show_range_kinematics[1]
 
-    fig, axs = plt.subplots(2, 1)
-    mcl_arr = []
-    mcd_arr = []
-    mclt_arr = []
-    mcdt_arr = []
-    mclr_arr = []
-    mcdr_arr = []
-    if plot_mode == 'against_t':
-        for i in range(len(legends)):
-            axs[0].plot(cf_array[i][:, 0] / cycle_time,
-                        cf_array[i][:, 1],
-                        label=legends[i])
-            axs[1].plot(cf_array[i][:, 0] / cycle_time,
-                        cf_array[i][:, 2],
-                        label=legends[i])
+    kinematics_arr_processed = []
+    fig, axs = plt.subplots(1, 1)
+    for i in range(noOfCases):
+        kinematics_array = np.array(data_array[i][0])
+        timei = (kinematics_array[:, 0] - kinematics_array[0, 0]) / cycle_time
+        kinematics_flapping = kinematics_array[:, 1] - kinematics_array[0, 1]
+        kinematics_pitching = kinematics_array[:, 2] - kinematics_array[0, 2]
+        kinematics_arr_processed.append(
+            [timei, kinematics_flapping, kinematics_pitching])
 
-            cl_spl = UnivariateSpline(cf_array[i][:, 0] / cycle_time,
-                                      cf_array[i][:, 1],
-                                      s=0)
-            mcl = cl_spl.integral(time_to_plot[0], time_to_plot[1])
-            mclt = cl_spl.integral(time_to_plot[0] + 0.5 * pt, time_to_plot[1]
-                                   - 0.5 - 0.5 * pt) / (0.5 - pt)
-            mclr = cl_spl.integral(time_to_plot[0] + 0.5 - 0.5 * pt,
-                                   time_to_plot[0] + 0.5 + 0.5 * pt) / pt
+        axs.plot(timei, kinematics_flapping, label=legends[i] + '_flapping')
+        axs.plot(timei, kinematics_pitching, label=legends[i] + '_pitching')
 
-            cd_spl = UnivariateSpline(cf_array[i][:, 0] / cycle_time,
-                                      cf_array[i][:, 2],
-                                      s=0)
-            mcd = cd_spl.integral(time_to_plot[0], time_to_plot[1])
-            mcdt = cd_spl.integral(time_to_plot[0] + 0.5 * pt, time_to_plot[1]
-                                   - 0.5 - 0.5 * pt) / (0.5 - pt)
-            mcdr = cd_spl.integral(time_to_plot[0] + 0.5 - 0.5 * pt,
-                                   time_to_plot[0] + 0.5 + 0.5 * pt) / pt
+    if range_time != 'all':
+        axs.set_xlim(range_time)
+    if range_value != 'all':
+        axs.set_ylim(range_value)
 
-            mcl_arr.append(mcl)
-            mcd_arr.append(mcd)
-            mclt_arr.append(mclt)
-            mcdt_arr.append(mcdt)
-            mclr_arr.append(mclr)
-            mcdr_arr.append(mcdr)
+    axs.set_xlabel(r't')
+    axs.set_ylabel(r'angle')
+    axs.label_outer()
 
-        with open('meancf_AR.dat', 'w') as f:
-            for item, cf_lgd in zip(mcl_arr, legends):
-                f.write("%s:\n" % cf_lgd)
-                f.write("mcl = %s\n" % '{0:.8g}'.format(item))
-            f.write("\n")
-            for item, ref_lgd in zip(mcd_arr, legends):
-                f.write("%s:\n" % ref_lgd)
-                f.write("mcd = %s\n" % '{0:.8g}'.format(item))
-            f.write("\n")
-            for item, cf_lgd in zip(mclt_arr, legends):
-                f.write("%s:\n" % cf_lgd)
-                f.write("mclt = %s\n" % '{0:.8g}'.format(item))
-            f.write("\n")
-            for item, ref_lgd in zip(mcdt_arr, legends):
-                f.write("%s:\n" % ref_lgd)
-                f.write("mcdt = %s\n" % '{0:.8g}'.format(item))
-            f.write("\n")
-            for item, cf_lgd in zip(mclr_arr, legends):
-                f.write("%s:\n" % cf_lgd)
-                f.write("mclr = %s\n" % '{0:.8g}'.format(item))
-            f.write("\n")
-            for item, ref_lgd in zip(mcdr_arr, legends):
-                f.write("%s:\n" % ref_lgd)
-                f.write("mcdr = %s\n" % '{0:.8g}'.format(item))
+    axs.legend(loc='upper center',
+               bbox_to_anchor=(legendx, legendy),
+               ncol=len(legends),
+               fontsize='small',
+               frameon=False)
 
-        if time_to_plot != 'all':
-            axs[0].set_xlim(time_to_plot)
-            axs[1].set_xlim(time_to_plot)
-        if range_cl != 'all':
-            axs[0].set_ylim(range_cl)
-            axs[1].set_ylim(range_cd)
-
-        for ax in axs:
-            ax.axhline(y=0, color='k', linestyle='-.', linewidth=0.5)
-            ax.axvline(x=4.5, color='k', linestyle='-.', linewidth=0.5)
-            ax.set_xlabel(r'$\^t$')
-
-        axs[0].set_ylabel(r'$C_L$')
-        axs[1].set_ylabel(r'$C_D$')
-
-        axs[0].label_outer()
-        axs[1].label_outer()
-
-        axs[0].legend(loc='upper center',
-                      bbox_to_anchor=(legendx, legendy),
-                      ncol=len(legends),
-                      fontsize='small',
-                      frameon=False)
-
-    title = 'transient force AR'
+    title = 'kinematics'
     out_image_file = os.path.join(image_out_path, title + '.svg')
     fig.savefig(out_image_file)
     # plt.show()
 
-    return fig
+    return kinematics_arr_processed
+
+
+def force_processing(data_array,
+                     legends,
+                     show_range_kinematics,
+                     image_out_path,
+                     cycle_time,
+                     cutoff,
+                     b,
+                     a,
+                     fs,
+                     order,
+                     plot_frequencyResponse='no'):
+    """
+    function to plot cfd force coefficients results
+    """
+    plt.rcParams.update({
+        # "text.usetex": True,
+        'mathtext.fontset': 'stix',
+        'font.family': 'STIXGeneral',
+        'font.size': 24,
+        'figure.figsize': (12, 16),
+        'lines.linewidth': 1.0,
+        'lines.markersize': 0.1,
+        'lines.markerfacecolor': 'white',
+        'figure.dpi': 300,
+        'figure.subplot.left': 0.125,
+        'figure.subplot.right': 0.9,
+        'figure.subplot.top': 0.9,
+        'figure.subplot.bottom': 0.1,
+        'figure.subplot.wspace': 0.1,
+        'figure.subplot.hspace': 0.1,
+    })
+
+    if plot_frequencyResponse == 'yes':
+        # Plot the frequency response.
+        fig0, axs = plt.subplots(1, 1)
+        w, h = freqz(b, a, worN=8000)
+        axs.plot(0.5 * fs * w / np.pi, np.abs(h), 'b')
+        axs.plot(cutoff, 0.5 * np.sqrt(2), 'ko')
+        axs.axvline(cutoff, color='k')
+        axs.set_xlim(0, 0.5 * fs)
+        plt.title("Lowpass Filter Frequency Response")
+        axs.set_xlabel('Frequency [Hz]')
+        axs.grid()
+        # plt.show()
+
+        title = 'refquency respose'
+        out_image_file = os.path.join(image_out_path, title + '.svg')
+        fig0.savefig(out_image_file)
+
+    legendx = 0.5
+    legendy = 1.15
+
+    noOfCases = len(legends)
+    range_time = show_range_kinematics[0]
+    range_value = show_range_kinematics[1]
+
+    force_arr_processed = []
+    fig, axs = plt.subplots(2, 1)
+    for i in range(noOfCases):
+        force_array = np.array(data_array[i][1])
+        timei = (force_array[:, 0] - force_array[0, 0]) / cycle_time
+        fx = force_array[:, 1]
+        fy = force_array[:, 2]
+        fz = force_array[:, 3]
+        mx = force_array[:, 4]
+        my = force_array[:, 5]
+        mz = force_array[:, 6]
+        force_arr_processed.append([timei, fx, fy, fz, mx, my, mz])
+
+        axs[0].plot(timei, fx, label=legends[i] + '_fx')
+        axs[0].plot(timei, fy, label=legends[i] + '_fy')
+        axs[0].plot(timei, fz, label=legends[i] + '_fz')
+        axs[1].plot(timei, mx, label=legends[i] + '_mx')
+        axs[1].plot(timei, my, label=legends[i] + '_my')
+        axs[1].plot(timei, mz, label=legends[i] + '_mz')
+
+    if range_time != 'all':
+        axs[0].set_xlim(range_time)
+        axs[1].set_xlim(range_time)
+    if range_value != 'all':
+        axs[0].set_ylim(range_value)
+        axs[1].set_ylim(range_value)
+
+    axs[0].set_ylabel(r'N')
+    axs[1].set_ylabel(r'Nmm')
+    for ax in axs:
+        ax.set_xlabel(r't')
+        ax.label_outer()
+
+        ax.legend(loc='upper center',
+                  bbox_to_anchor=(legendx, legendy),
+                  ncol=len(legends),
+                  fontsize='small',
+                  frameon=False)
+
+    title = 'force'
+    out_image_file = os.path.join(image_out_path, title + '.svg')
+    fig.savefig(out_image_file)
+    # plt.show()
+
+    return force_arr_processed
