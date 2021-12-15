@@ -79,10 +79,12 @@ def butter_lowpass_filter(data, cutoff, fs, order=5):
     )
     ysos = sosfilt(sos, data)
     yba = lfilter(b, a, data)
-    return ysos, yba
+    return ysos
 
 
 def kinematics_processing(data_array,
+                          gearRatio,
+                          outTimeSeries,
                           legends,
                           show_range_kinematics,
                           image_out_path,
@@ -102,7 +104,7 @@ def kinematics_processing(data_array,
         'font.family': 'STIXGeneral',
         'font.size': 24,
         'figure.figsize': (12, 10),
-        'lines.linewidth': 4.0,
+        'lines.linewidth': 1.0,
         'lines.markersize': 0.1,
         'lines.markerfacecolor': 'white',
         'figure.dpi': 300,
@@ -142,14 +144,33 @@ def kinematics_processing(data_array,
     fig, axs = plt.subplots(1, 1)
     for i in range(noOfCases):
         kinematics_array = np.array(data_array[i][0])
-        timei = (kinematics_array[:, 0] - kinematics_array[0, 0]) / cycle_time
+        timei = (kinematics_array[:, 0] -
+                 kinematics_array[0, 0]) / (1000 * cycle_time)
+        # print(timei)
         kinematics_flapping = kinematics_array[:, 1] - kinematics_array[0, 1]
         kinematics_pitching = kinematics_array[:, 2] - kinematics_array[0, 2]
-        kinematics_arr_processed.append(
-            [timei, kinematics_flapping, kinematics_pitching])
 
-        axs.plot(timei, kinematics_flapping, label=legends[i] + '_flapping')
-        axs.plot(timei, kinematics_pitching, label=legends[i] + '_pitching')
+        flappingSpline = UnivariateSpline(timei, kinematics_flapping, s=0)
+        pitchingSpline = UnivariateSpline(timei, kinematics_pitching, s=0)
+
+        kinematics_arr = []
+        for ti in outTimeSeries:
+            phii = flappingSpline(ti) / 4096 * 360
+            thetai = (pitchingSpline(ti) -
+                      flappingSpline(ti) / gearRatio) / 4096 * 360
+            # thetai = pitchingSpline(ti) / 4096 * 360
+            kinematic_anglei = [phii, thetai]
+            kinematics_arr.append(kinematic_anglei)
+
+        kinematics_arr = np.array(kinematics_arr)
+        kinematics_arr_processed.append(kinematics_arr)
+
+        axs.plot(outTimeSeries,
+                 kinematics_arr[:, 0],
+                 label=legends[i] + '_flapping')
+        axs.plot(outTimeSeries,
+                 kinematics_arr[:, 1],
+                 label=legends[i] + '_pitching')
 
     if range_time != 'all':
         axs.set_xlim(range_time)
@@ -171,10 +192,12 @@ def kinematics_processing(data_array,
     fig.savefig(out_image_file)
     # plt.show()
 
+    kinematics_arr_processed = np.array(kinematics_arr_processed)
     return kinematics_arr_processed
 
 
 def force_processing(data_array,
+                     outTimeSeries,
                      legends,
                      show_range_kinematics,
                      image_out_path,
@@ -234,21 +257,51 @@ def force_processing(data_array,
     fig, axs = plt.subplots(2, 1)
     for i in range(noOfCases):
         force_array = np.array(data_array[i][1])
-        timei = (force_array[:, 0] - force_array[0, 0]) / cycle_time
-        fx = force_array[:, 1]
-        fy = force_array[:, 2]
-        fz = force_array[:, 3]
-        mx = force_array[:, 4]
-        my = force_array[:, 5]
-        mz = force_array[:, 6]
-        force_arr_processed.append([timei, fx, fy, fz, mx, my, mz])
+        timei = (force_array[:, 0] - force_array[0, 0]) / (1000 * cycle_time)
+        timei = butter_lowpass_filter(timei, cutoff, fs, order)
+        fx = butter_lowpass_filter(force_array[:, 1], cutoff, fs, order)
+        fy = butter_lowpass_filter(force_array[:, 2], cutoff, fs, order)
+        fz = butter_lowpass_filter(force_array[:, 3], cutoff, fs, order)
+        mx = butter_lowpass_filter(force_array[:, 4], cutoff, fs, order)
+        my = butter_lowpass_filter(force_array[:, 5], cutoff, fs, order)
+        mz = butter_lowpass_filter(force_array[:, 6], cutoff, fs, order)
 
-        axs[0].plot(timei, fx, label=legends[i] + '_fx')
-        axs[0].plot(timei, fy, label=legends[i] + '_fy')
-        axs[0].plot(timei, fz, label=legends[i] + '_fz')
-        axs[1].plot(timei, mx, label=legends[i] + '_mx')
-        axs[1].plot(timei, my, label=legends[i] + '_my')
-        axs[1].plot(timei, mz, label=legends[i] + '_mz')
+        fxSpline = UnivariateSpline(timei, fx, s=0)
+        fySpline = UnivariateSpline(timei, fy, s=0)
+        fzSpline = UnivariateSpline(timei, fz, s=0)
+        mxSpline = UnivariateSpline(timei, mx, s=0)
+        mySpline = UnivariateSpline(timei, my, s=0)
+        mzSpline = UnivariateSpline(timei, mz, s=0)
+
+        force_arr = []
+        for ti in outTimeSeries:
+            forcei = [
+                fxSpline(ti),
+                fySpline(ti),
+                fzSpline(ti),
+                mxSpline(ti),
+                mySpline(ti),
+                mzSpline(ti)
+            ]
+            # print(forcei[0])
+            force_arr.append(forcei)
+
+        force_arr = np.array(force_arr)
+        force_arr_processed.append(force_arr)
+
+        axs[0].plot(outTimeSeries, force_arr[:, 0], label=legends[i] + '_fx')
+        axs[0].plot(outTimeSeries, force_arr[:, 1], label=legends[i] + '_fy')
+        axs[0].plot(outTimeSeries, force_arr[:, 2], label=legends[i] + '_fz')
+        axs[1].plot(outTimeSeries, force_arr[:, 3], label=legends[i] + '_mx')
+        axs[1].plot(outTimeSeries, force_arr[:, 4], label=legends[i] + '_my')
+        axs[1].plot(outTimeSeries, force_arr[:, 5], label=legends[i] + '_mz')
+
+        # axs[0].plot(timei, fx, label=legends[i] + '_fx')
+        # axs[0].plot(timei, fy, label=legends[i] + '_fy')
+        # axs[0].plot(timei, fz, label=legends[i] + '_fz')
+        # axs[1].plot(timei, mx, label=legends[i] + '_mx')
+        # axs[1].plot(timei, my, label=legends[i] + '_my')
+        # axs[1].plot(timei, mz, label=legends[i] + '_mz')
 
     if range_time != 'all':
         axs[0].set_xlim(range_time)
@@ -274,4 +327,117 @@ def force_processing(data_array,
     fig.savefig(out_image_file)
     # plt.show()
 
+    force_arr_processed = np.array(force_arr_processed)
     return force_arr_processed
+
+
+def force_transform(kinematics_arr, force_arr, outTimeSeries,
+                    show_range_kinematics, image_out_path):
+    """
+    function to plot cfd force coefficients results
+    """
+    plt.rcParams.update({
+        # "text.usetex": True,
+        'mathtext.fontset': 'stix',
+        'font.family': 'STIXGeneral',
+        'font.size': 24,
+        'figure.figsize': (12, 16),
+        'lines.linewidth': 1.0,
+        'lines.markersize': 0.1,
+        'lines.markerfacecolor': 'white',
+        'figure.dpi': 300,
+        'figure.subplot.left': 0.125,
+        'figure.subplot.right': 0.9,
+        'figure.subplot.top': 0.9,
+        'figure.subplot.bottom': 0.1,
+        'figure.subplot.wspace': 0.1,
+        'figure.subplot.hspace': 0.1,
+    })
+
+    legendx = 0.5
+    legendy = 1.15
+
+    range_time = show_range_kinematics[0]
+    range_value = show_range_kinematics[1]
+
+    fig1, axs = plt.subplots(3, 1)
+
+    axs[0].plot(outTimeSeries, kinematics_arr[:, 0], label='phi')
+    axs[0].plot(outTimeSeries, kinematics_arr[:, 1], label='theta')
+
+    axs[1].plot(outTimeSeries, force_arr[:, 0], label='net_fx')
+    axs[1].plot(outTimeSeries, force_arr[:, 1], label='net_fy')
+    axs[1].plot(outTimeSeries, force_arr[:, 2], label='net_fz')
+    axs[2].plot(outTimeSeries, force_arr[:, 3], label='net_mx')
+    axs[2].plot(outTimeSeries, force_arr[:, 4], label='net_my')
+    axs[2].plot(outTimeSeries, force_arr[:, 5], label='net_mz')
+
+    axs[0].set_ylabel(r'Angle (degrees)')
+    axs[1].set_ylabel(r'Force (N)')
+    axs[2].set_ylabel(r'Moment (Nmm)')
+    for ax in axs:
+        ax.set_xlabel(r't')
+        ax.label_outer()
+
+        ax.legend(loc='upper center',
+                  bbox_to_anchor=(legendx, legendy),
+                  ncol=3,
+                  fontsize='small',
+                  frameon=False)
+
+    title = 'net_aerodynamic_force_wingFixedFrame'
+    out_image_file = os.path.join(image_out_path, title + '.svg')
+    fig1.savefig(out_image_file)
+
+    force_arr_tranformed = []
+    for i in range(len(outTimeSeries)):
+        thetai = kinematics_arr[i][1] * np.pi / 180
+        fxi = force_arr[i][0]
+        fyi = force_arr[i][1]
+        fzi = force_arr[i][2]
+        mxi = force_arr[i][3]
+        myi = force_arr[i][4]
+        mzi = force_arr[i][5]
+
+        #--transform to lift-drag frame--
+        fhi = np.cos(thetai) * fyi - np.sin(thetai) * fxi
+        fvi = np.sin(thetai) * fyi + np.cos(thetai) * fxi
+        fsi = fzi
+        mhi = np.cos(thetai) * myi - np.sin(thetai) * mxi
+        mvi = np.sin(thetai) * myi + np.cos(thetai) * mxi
+        msi = mzi
+
+        force_arr_tranformed.append([fhi, fvi, fsi, mhi, mvi, msi])
+
+    force_arr_tranformed = np.array(force_arr_tranformed)
+
+    fig2, axs2 = plt.subplots(3, 1)
+
+    axs2[0].plot(outTimeSeries, kinematics_arr[:, 0], label='phi')
+    axs2[0].plot(outTimeSeries, kinematics_arr[:, 1], label='theta')
+
+    axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 0], label='drag')
+    axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 1], label='lift')
+    axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 2], label='side_force')
+    axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 3], label='mh')
+    axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 4], label='mv')
+    axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 5], label='ms')
+
+    axs2[0].set_ylabel(r'Angle (degrees)')
+    axs2[1].set_ylabel(r'Force (N)')
+    axs2[2].set_ylabel(r'Moment (Nmm)')
+    for ax in axs2:
+        ax.set_xlabel(r't')
+        ax.label_outer()
+
+        ax.legend(loc='upper center',
+                  bbox_to_anchor=(legendx, legendy),
+                  ncol=3,
+                  fontsize='small',
+                  frameon=False)
+
+    title = 'net_aerodynamic_force_transformed'
+    out_image_file = os.path.join(image_out_path, title + '.svg')
+    fig2.savefig(out_image_file)
+
+    return force_arr_tranformed
