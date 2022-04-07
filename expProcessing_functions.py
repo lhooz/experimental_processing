@@ -196,7 +196,8 @@ def kinematics_processing(data_array,
     return kinematics_arr_processed
 
 
-def force_processing(data_array,
+def force_processing(Tweight,
+                     data_array,
                      outTimeSeries,
                      legends,
                      show_range_kinematics,
@@ -257,13 +258,14 @@ def force_processing(data_array,
     fig, axs = plt.subplots(2, 1)
     for i in range(noOfCases):
         force_array = np.array(data_array[i][1])
+        my0 = Tweight[i]
         timei = (force_array[:, 0] - force_array[0, 0]) / (1000 * cycle_time)
         timei = butter_lowpass_filter(timei, cutoff, fs, order)
         fx = butter_lowpass_filter(force_array[:, 1], cutoff, fs, order)
         fy = butter_lowpass_filter(force_array[:, 2], cutoff, fs, order)
         fz = butter_lowpass_filter(force_array[:, 3], cutoff, fs, order)
         mx = butter_lowpass_filter(force_array[:, 4], cutoff, fs, order)
-        my = butter_lowpass_filter(force_array[:, 5], cutoff, fs, order)
+        my = butter_lowpass_filter(force_array[:, 5] - my0, cutoff, fs, order)
         mz = butter_lowpass_filter(force_array[:, 6], cutoff, fs, order)
 
         fxSpline = UnivariateSpline(timei, fx, s=0)
@@ -331,7 +333,7 @@ def force_processing(data_array,
     return force_arr_processed
 
 
-def force_transform(kinematics_arr, force_arr, outTimeSeries,
+def force_transform(Tweight, kinematics_arr, force_arr, outTimeSeries,
                     show_range_kinematics, image_out_path):
     """
     function to plot cfd force coefficients results
@@ -353,6 +355,8 @@ def force_transform(kinematics_arr, force_arr, outTimeSeries,
         'figure.subplot.wspace': 0.1,
         'figure.subplot.hspace': 0.1,
     })
+
+    mh_Buoyancy = Tweight[0] - Tweight[1]
 
     legendx = 0.5
     legendy = 1.15
@@ -385,11 +389,15 @@ def force_transform(kinematics_arr, force_arr, outTimeSeries,
                   fontsize='small',
                   frameon=False)
 
-    title = 'net_aerodynamic_force_wingFixedFrame'
+    title = 'net_aeroBuoyant_force_wingFixedFrame'
     out_image_file = os.path.join(image_out_path, title + '.svg')
     fig1.savefig(out_image_file)
 
     force_arr_tranformed = []
+    #-----------------------------------------
+    flappingSpline = UnivariateSpline(outTimeSeries, kinematics_arr[:, 0], s=0)
+    phiDot = flappingSpline.derivative()
+    #-----------------------------------------
     for i in range(len(outTimeSeries)):
         thetai = kinematics_arr[i][1] * np.pi / 180
         fxi = force_arr[i][0]
@@ -400,12 +408,17 @@ def force_transform(kinematics_arr, force_arr, outTimeSeries,
         mzi = force_arr[i][5]
 
         #--transform to lift-drag frame--
-        fhi = np.cos(thetai) * fyi - np.sin(thetai) * fxi
-        fvi = np.sin(thetai) * fyi + np.cos(thetai) * fxi
+        fhi = np.cos(thetai) * fyi + np.sin(thetai) * fxi
+        fvi = -1 * np.sin(thetai) * fyi + np.cos(thetai) * fxi
         fsi = fzi
-        mhi = np.cos(thetai) * myi - np.sin(thetai) * mxi
-        mvi = np.sin(thetai) * myi + np.cos(thetai) * mxi
+        mhi = np.cos(thetai) * myi + np.sin(thetai) * mxi - mh_Buoyancy
+        mvi = -1 * np.sin(thetai) * myi + np.cos(thetai) * mxi
         msi = mzi
+        
+        #---remove direction of mv to resemble drag----
+        phiDoti = phiDot(outTimeSeries[i])
+        mvi = mvi * np.sign(phiDoti)
+        #----------------------------------------------
 
         force_arr_tranformed.append([fhi, fvi, fsi, mhi, mvi, msi])
 
@@ -436,8 +449,29 @@ def force_transform(kinematics_arr, force_arr, outTimeSeries,
                   fontsize='small',
                   frameon=False)
 
-    title = 'net_aerodynamic_force_transformed'
+    title = 'net_aerodForce_transformed'
     out_image_file = os.path.join(image_out_path, title + '.svg')
     fig2.savefig(out_image_file)
 
     return force_arr_tranformed
+    
+def write_force_array(outTimeSeries, force_arr_tranformed, data_out_path):
+    """
+    function to plot cfd force coefficients results
+    """
+    data = []
+    for ti, fm_i in zip(outTimeSeries, force_arr_tranformed):
+        fm_str = []
+        for fm in fm_i:
+            fm_s = '{0:.10g}'.format(fm)
+            fm_str.append(fm_s)
+            
+        datai = '{0:.10g}'.format(ti) + ',' + ','.join(fm_str)
+        data.append(datai)
+        
+    save_file = data_out_path + '/net_aeroForce_transformed.csv'
+    
+    with open(save_file, 'w') as f:
+        f.write("t(s),fx(N),fy(N),fz(N),mh(Nmm),mv(Nmm),ms(Nmm)\n")
+        for item in data:
+            f.write("%s\n" % item)
