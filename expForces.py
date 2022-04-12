@@ -6,15 +6,18 @@ import numpy as np
 from expProcessing_functions import read_exp_data, expDataAveraging, butter_lowpass, butter_lowpass_filter
 from expProcessing_functions import kinematics_processing, force_processing, force_transform, write_force_array
 
-#-------------case file control----------
+# -------------case file control----------
 phi = [60.0]
 Re = [1000.0]
 AR = [2.0]
 r1hat = [0.4]
 offset = [0.0]
 ptc = [1.5]
-#-----------------------------------------
-kinematics_file = 'kinematics.dat'
+#------------- Filter requirements-----------
+order = 6
+fs = 1 / 64e-3  # sample rate, Hz
+cutoffRatio = 40  # how many times of flapping frequency to be cutoff
+# -----------------------------------------
 exp_data_list = []
 for phii in phi:
     for r1h in r1hat:
@@ -29,33 +32,31 @@ for phii in phi:
                                         r1h) + '__Re' + '{0:.1f}'.format(
                                             re) + '_ptc' + '{0:.3g}'.format(p)
                         exp_data_list.append(exp_data_name)
-# -------------input plot control----------
+# -------------time series control----------
 startTime = 0
-endTime = 32
 timeStep = 1e-2
-outTimeSeries = np.arange(startTime, endTime, timeStep)
 # -----------------------------------------
 gearRatio = 2.49
 # -----------------------------------------
 range_time = 'all'
 range_value = 'all'
-cycle_time = 1.0
+timeScale = 1.0
 # ---------------------------------------
 show_range_kinematics = [range_time, range_value]
 # -----------------------------------------
 cwd = os.getcwd()
 data_dir = os.path.join(os.path.dirname(cwd),
                         'experimental_data/expFinal_results')
-kinematics_dir = os.path.join(os.path.dirname(cwd),
-                              'experimental_data/kinematic_cases_expFinal')
+refUA_dir = os.path.join(os.path.dirname(cwd),
+                        'experimental_data/kinematic_cases_expFinal')
 out_dir = os.path.join(os.path.dirname(cwd),
                        'processed_results/expFinal_processed')
 # -----------------------------------------
-if os.path.exists(out_dir):
-    shutil.rmtree(out_dir)
-os.mkdir(out_dir)
-#------------------------------------------
+if not os.path.exists(out_dir):
+    os.mkdir(out_dir)
+# ------------------------------------------
 data_file_all = [f.name for f in os.scandir(data_dir) if f.is_file()]
+outTimeSeries = []
 air_data_cases = []
 water_data_cases = []
 for datai in exp_data_list:
@@ -63,9 +64,11 @@ for datai in exp_data_list:
     image_out_path = case_out_dir + '/images'
     data_out_path = case_out_dir + '/data'
 
+    if os.path.exists(case_out_dir):
+        shutil.rmtree(case_out_dir)
     os.mkdir(case_out_dir)
     os.mkdir(image_out_path)
-    os.mkdir(case_out_dir)
+    os.mkdir(data_out_path)
 
     air_data_array = []
     water_data_array = []
@@ -79,31 +82,33 @@ for datai in exp_data_list:
             zeroDatai, expDatai = read_exp_data(exp_data_filei)
             water_data_array.append([zeroDatai, expDatai])
 
-        air_case_average = expDataAveraging(air_data_array)
-        water_case_average = expDataAveraging(water_data_array)
-        air_data_cases.append(air_case_average)
-        water_data_cases.append(water_case_average)
+    air_time, air_case_average = expDataAveraging(startTime, timeStep,
+                                                  timeScale, air_data_array)
+    water_time, water_case_average = expDataAveraging(startTime, timeStep,
+                                                      timeScale,
+                                                      water_data_array)
+    if len(air_time) <= len(water_time):
+        case_time_series = air_time
+    else:
+        case_time_series = water_time
+
+    outTimeSeries.append(case_time_series)
+    air_data_cases.append(air_case_average)
+    water_data_cases.append(water_case_average)
 # ---------------------------------------
-# Filter requirements.
-order = 6
-fs = 1 / 64e-3  # sample rate, Hz
-cutoff = 20 / 7.5  # desired cutoff frequency of the filter, Hz
-# ----------------------------------------------
-# Get the filter coefficients so we can check its frequency response.
-sos, b, a = butter_lowpass(cutoff, fs, order=order)
-
-kinematics_arr_cases = kinematics_processing(
+filterParameter_cases, kinematics_arr_cases = kinematics_processing(
     exp_data_list, air_data_cases, water_data_cases, gearRatio, outTimeSeries,
-    show_range_kinematics, out_dir, cycle_time, cutoff, b, a, fs, order)
-force_arr_processed = force_processing(Tweight, data_array, outTimeSeries,
-                                       legends, show_range_kinematics,
-                                       image_out_path, cycle_time, cutoff, b,
-                                       a, fs, order, 'yes')
+    show_range_kinematics, out_dir, cutoffRatio, timeScale, fs, order)
+bouyacyF_cases, netForce_cases = force_processing(
+    exp_data_list, air_data_cases, water_data_cases, outTimeSeries,
+    show_range_kinematics, out_dir, timeScale, filterParameter_cases, fs,
+    order, 'yes')
 
-netForce = force_arr_processed[1] - force_arr_processed[0]
+transformed_aeroForce_cases = force_transform(exp_data_list,
+                                              kinematics_arr_cases,
+                                              bouyacyF_cases, netForce_cases,
+                                              outTimeSeries,
+                                              show_range_kinematics, out_dir)
 
-netForce_transformed = force_transform(Tweight, averageKinematics, netForce,
-                                       outTimeSeries, show_range_kinematics,
-                                       image_out_path)
-
-write_force_array(outTimeSeries, netForce_transformed, data_out_path)
+write_force_array(exp_data_list, outTimeSeries, transformed_aeroForce_cases,
+                  out_dir)

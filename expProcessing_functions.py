@@ -28,18 +28,17 @@ def read_exp_data(expDataFile):
                 line_count += 1
             elif line_count < 21:
                 if line_count == 1:
-                    tstart = row[2]
-                t_motor = row[2] - tstart
+                    tstart = float(row[2])
+                t_motor = float(row[2]) - tstart
                 # print(row)
                 motor_flapping = row[3]
                 motor_pitching = row[4]
-                zeroKinematics.append([
-                    float(t_motor),
-                    float(motor_flapping),
-                    float(motor_pitching)
-                ])
+                zeroKinematics.append(
+                    [t_motor,
+                     float(motor_flapping),
+                     float(motor_pitching)])
 
-                t_balance = row[5] - tstart
+                t_balance = float(row[5]) - tstart
                 fx = row[6]
                 fy = row[7]
                 fz = row[8]
@@ -47,7 +46,7 @@ def read_exp_data(expDataFile):
                 my = row[10]
                 mz = row[11]
                 zeroForce.append([
-                    float(t_balance),
+                    t_balance,
                     float(fx),
                     float(fy),
                     float(fz),
@@ -56,19 +55,17 @@ def read_exp_data(expDataFile):
                     float(mz),
                 ])
 
-                line_count += 1
-            else:
-                t_motor = row[2] - tstart
+                #-------------------------------------
+                t_motor = float(row[2]) - tstart
                 # print(row)
                 motor_flapping = row[3]
                 motor_pitching = row[4]
-                expKinematics.append([
-                    float(t_motor),
-                    float(motor_flapping),
-                    float(motor_pitching)
-                ])
+                expKinematics.append(
+                    [t_motor,
+                     float(motor_flapping),
+                     float(motor_pitching)])
 
-                t_balance = row[5] - tstart
+                t_balance = float(row[5]) - tstart
                 fx = row[6]
                 fy = row[7]
                 fz = row[8]
@@ -76,7 +73,36 @@ def read_exp_data(expDataFile):
                 my = row[10]
                 mz = row[11]
                 expForce.append([
-                    float(t_balance),
+                    t_balance,
+                    float(fx),
+                    float(fy),
+                    float(fz),
+                    float(mx),
+                    float(my),
+                    float(mz),
+                ])
+                #-------------------------------------
+
+                line_count += 1
+            else:
+                t_motor = float(row[2]) - tstart
+                # print(row)
+                motor_flapping = row[3]
+                motor_pitching = row[4]
+                expKinematics.append(
+                    [t_motor,
+                     float(motor_flapping),
+                     float(motor_pitching)])
+
+                t_balance = float(row[5]) - tstart
+                fx = row[6]
+                fy = row[7]
+                fz = row[8]
+                mx = row[9]
+                my = row[10]
+                mz = row[11]
+                expForce.append([
+                    t_balance,
                     float(fx),
                     float(fy),
                     float(fz),
@@ -95,7 +121,7 @@ def read_exp_data(expDataFile):
     return zeroData, expData
 
 
-def expDataAveraging(data_array):
+def expDataAveraging(startTime, timeStep, timeScale, data_array):
     """function for averaging multiple exp data"""
     no_of_cases = len(data_array)
 
@@ -123,18 +149,23 @@ def expDataAveraging(data_array):
         zeroKinematics_average += datai[0][0][0:zero_min_length]
         expKinematics_average += datai[1][0][0:exp_min_length]
         zeroForce_average += datai[0][1][0:zero_min_length]
-        expForce_average += datai[1][1][0:zero_min_length]
+        expForce_average += datai[1][1][0:exp_min_length]
 
     zeroKinematics_average = zeroKinematics_average / no_of_cases
     expKinematics_average = expKinematics_average / no_of_cases
     zeroForce_average = zeroForce_average / no_of_cases
     expForce_average = expForce_average / no_of_cases
 
+    #----time series---
+    endTime = expForce_average[-1, 0] / (1000 * timeScale)
+    outTimeSeries = np.arange(startTime, endTime, timeStep)
+    #-----------------------------------------
+
     zero_out = [zeroKinematics_average, zeroForce_average]
     exp_out = [expKinematics_average, expForce_average]
     out_data_array = [zero_out, exp_out]
 
-    return out_data_array
+    return outTimeSeries, out_data_array
 
 
 def butter_lowpass(cutoff, fs, order=5):
@@ -163,13 +194,11 @@ def kinematics_processing(exp_data_list,
                           air_data,
                           water_data,
                           gearRatio,
-                          outTimeSeries,
+                          outTimeSeries_all,
                           show_range_kinematics,
                           out_dir,
-                          cycle_time,
-                          cutoff,
-                          b,
-                          a,
+                          cutoffRatio,
+                          timeScale,
                           fs,
                           order,
                           plot_frequencyResponse='no'):
@@ -194,23 +223,6 @@ def kinematics_processing(exp_data_list,
         'figure.subplot.hspace': 0.1,
     })
 
-    if plot_frequencyResponse == 'yes':
-        # Plot the frequency response.
-        fig0, axs = plt.subplots(1, 1)
-        w, h = freqz(b, a, worN=8000)
-        axs.plot(0.5 * fs * w / np.pi, np.abs(h), 'b')
-        axs.plot(cutoff, 0.5 * np.sqrt(2), 'ko')
-        axs.axvline(cutoff, color='k')
-        axs.set_xlim(0, 0.5 * fs)
-        plt.title("Lowpass Filter Frequency Response")
-        axs.set_xlabel('Frequency [Hz]')
-        axs.grid()
-        # plt.show()
-
-        title = 'refquency respose'
-        out_image_file = os.path.join(out_dir, title + '.svg')
-        fig0.savefig(out_image_file)
-
     legendx = 0.5
     legendy = 1.15
 
@@ -218,16 +230,19 @@ def kinematics_processing(exp_data_list,
     range_time = show_range_kinematics[0]
     range_value = show_range_kinematics[1]
 
-    legend = ['air', 'water']
+    legends = ['air', 'water']
+    filterParameter_cases = []
     kinematics_arr_cases = []
     for i in range(noOfCases):
         fig, axs = plt.subplots(1, 1)
         data_array = [air_data[i], water_data[i]]
         kinematics_arr_processed = []
+        outTimeSeries = outTimeSeries_all[i]
+
         for j in range(2):
             kinematics_array = np.array(data_array[j][1][0])
             timei = (kinematics_array[:, 0] -
-                     kinematics_array[0, 0]) / (1000 * cycle_time)
+                     kinematics_array[0, 0]) / (1000 * timeScale)
             # print(timei)
             kinematics_flapping = kinematics_array[:, 1] - kinematics_array[0,
                                                                             1]
@@ -283,20 +298,43 @@ def kinematics_processing(exp_data_list,
 
         kinematics_arr_cases.append(averageKinematics)
 
+        cutoff = 5 * cutoffRatio / np.max(
+            averageKinematics[:,
+                              0])  # desired cutoff frequency of the filter, Hz
+        # Get the filter coefficients so we can check its frequency response.
+        sos, b, a = butter_lowpass(cutoff, fs, order=order)
+        filterParameter_cases.append([cutoff, b, a])
+        # ---------------------------------------------------------
+
+        if plot_frequencyResponse == 'yes':
+            # Plot the frequency response.
+            fig0, axs = plt.subplots(1, 1)
+            w, h = freqz(b, a, worN=8000)
+            axs.plot(0.5 * fs * w / np.pi, np.abs(h), 'b')
+            axs.plot(cutoff, 0.5 * np.sqrt(2), 'ko')
+            axs.axvline(cutoff, color='k')
+            axs.set_xlim(0, 0.5 * fs)
+            plt.title("Lowpass Filter Frequency Response")
+            axs.set_xlabel('Frequency [Hz]')
+            axs.grid()
+            # plt.show()
+
+            title = 'refquency respose'
+            out_image_file = os.path.join(image_out_path, title + '.svg')
+            fig0.savefig(out_image_file)
+
     kinematics_arr_cases = np.array(kinematics_arr_processed)
-    return kinematics_arr_cases
+    return filterParameter_cases, kinematics_arr_cases
 
 
-def force_processing(Tweight,
-                     data_array,
-                     outTimeSeries,
-                     legends,
+def force_processing(exp_data_list,
+                     air_data,
+                     water_data,
+                     outTimeSeries_all,
                      show_range_kinematics,
-                     image_out_path,
-                     cycle_time,
-                     cutoff,
-                     b,
-                     a,
+                     out_dir,
+                     timeScale,
+                     filterParameter_cases,
                      fs,
                      order,
                      plot_frequencyResponse='no'):
@@ -321,111 +359,153 @@ def force_processing(Tweight,
         'figure.subplot.hspace': 0.1,
     })
 
-    if plot_frequencyResponse == 'yes':
-        # Plot the frequency response.
-        fig0, axs = plt.subplots(1, 1)
-        w, h = freqz(b, a, worN=8000)
-        axs.plot(0.5 * fs * w / np.pi, np.abs(h), 'b')
-        axs.plot(cutoff, 0.5 * np.sqrt(2), 'ko')
-        axs.axvline(cutoff, color='k')
-        axs.set_xlim(0, 0.5 * fs)
-        plt.title("Lowpass Filter Frequency Response")
-        axs.set_xlabel('Frequency [Hz]')
-        axs.grid()
-        # plt.show()
-
-        title = 'refquency respose'
-        out_image_file = os.path.join(image_out_path, title + '.svg')
-        fig0.savefig(out_image_file)
-
     legendx = 0.5
     legendy = 1.15
 
-    noOfCases = len(legends)
+    noOfCases = len(exp_data_list)
     range_time = show_range_kinematics[0]
     range_value = show_range_kinematics[1]
 
-    force_arr_processed = []
+    legends = ['air', 'water']
+    bouyacyF_cases = []
+    netForce_cases = []
     fig, axs = plt.subplots(2, 1)
-    for i in range(noOfCases):
-        force_array = np.array(data_array[i][1])
-        my0 = Tweight[i]
-        timei = (force_array[:, 0] - force_array[0, 0]) / (1000 * cycle_time)
-        timei = butter_lowpass_filter(timei, cutoff, fs, order)
-        fx = butter_lowpass_filter(force_array[:, 1], cutoff, fs, order)
-        fy = butter_lowpass_filter(force_array[:, 2], cutoff, fs, order)
-        fz = butter_lowpass_filter(force_array[:, 3], cutoff, fs, order)
-        mx = butter_lowpass_filter(force_array[:, 4], cutoff, fs, order)
-        my = butter_lowpass_filter(force_array[:, 5] - my0, cutoff, fs, order)
-        mz = butter_lowpass_filter(force_array[:, 6], cutoff, fs, order)
+    for j in range(noOfCases):
+        cutoff = filterParameter_cases[j][0]
+        zero_array = [air_data[j][0][1], water_data[j][0][1]]
+        data_array = [air_data[j][1], water_data[j][1]]
+        force_arr_processed = []
+        outTimeSeries = outTimeSeries_all[j]
 
-        fxSpline = UnivariateSpline(timei, fx, s=0)
-        fySpline = UnivariateSpline(timei, fy, s=0)
-        fzSpline = UnivariateSpline(timei, fz, s=0)
-        mxSpline = UnivariateSpline(timei, mx, s=0)
-        mySpline = UnivariateSpline(timei, my, s=0)
-        mzSpline = UnivariateSpline(timei, mz, s=0)
+        for i in range(2):
+            force_array = np.array(data_array[i][1])
+            timei = force_array[:, 0] / (1000 * timeScale)
+            timei = butter_lowpass_filter(timei, cutoff, fs, order)
+            fx = butter_lowpass_filter(force_array[:, 1], cutoff, fs, order)
+            fy = butter_lowpass_filter(force_array[:, 2], cutoff, fs, order)
+            fz = butter_lowpass_filter(force_array[:, 3], cutoff, fs, order)
+            mx = butter_lowpass_filter(force_array[:, 4], cutoff, fs, order)
+            my = butter_lowpass_filter(force_array[:, 5], cutoff, fs, order)
+            mz = butter_lowpass_filter(force_array[:, 6], cutoff, fs, order)
 
-        force_arr = []
-        for ti in outTimeSeries:
-            forcei = [
-                fxSpline(ti),
-                fySpline(ti),
-                fzSpline(ti),
-                mxSpline(ti),
-                mySpline(ti),
-                mzSpline(ti)
-            ]
-            # print(forcei[0])
-            force_arr.append(forcei)
+            fxSpline = UnivariateSpline(timei, fx, s=0)
+            fySpline = UnivariateSpline(timei, fy, s=0)
+            fzSpline = UnivariateSpline(timei, fz, s=0)
+            mxSpline = UnivariateSpline(timei, mx, s=0)
+            mySpline = UnivariateSpline(timei, my, s=0)
+            mzSpline = UnivariateSpline(timei, mz, s=0)
 
-        force_arr = np.array(force_arr)
-        force_arr_processed.append(force_arr)
+            force_arr = []
+            for ti in outTimeSeries:
+                forcei = [
+                    fxSpline(ti),
+                    fySpline(ti),
+                    fzSpline(ti),
+                    mxSpline(ti),
+                    mySpline(ti),
+                    mzSpline(ti)
+                ]
+                # print(forcei[0])
+                force_arr.append(forcei)
 
-        axs[0].plot(outTimeSeries, force_arr[:, 0], label=legends[i] + '_fx')
-        axs[0].plot(outTimeSeries, force_arr[:, 1], label=legends[i] + '_fy')
-        axs[0].plot(outTimeSeries, force_arr[:, 2], label=legends[i] + '_fz')
-        axs[1].plot(outTimeSeries, force_arr[:, 3], label=legends[i] + '_mx')
-        axs[1].plot(outTimeSeries, force_arr[:, 4], label=legends[i] + '_my')
-        axs[1].plot(outTimeSeries, force_arr[:, 5], label=legends[i] + '_mz')
+            force_arr = np.array(force_arr)
+            force_arr_processed.append(force_arr)
 
-        # axs[0].plot(timei, fx, label=legends[i] + '_fx')
-        # axs[0].plot(timei, fy, label=legends[i] + '_fy')
-        # axs[0].plot(timei, fz, label=legends[i] + '_fz')
-        # axs[1].plot(timei, mx, label=legends[i] + '_mx')
-        # axs[1].plot(timei, my, label=legends[i] + '_my')
-        # axs[1].plot(timei, mz, label=legends[i] + '_mz')
+            axs[0].plot(outTimeSeries,
+                        force_arr[:, 0],
+                        label=legends[i] + '_fx')
+            axs[0].plot(outTimeSeries,
+                        force_arr[:, 1],
+                        label=legends[i] + '_fy')
+            axs[0].plot(outTimeSeries,
+                        force_arr[:, 2],
+                        label=legends[i] + '_fz')
+            axs[1].plot(outTimeSeries,
+                        force_arr[:, 3],
+                        label=legends[i] + '_mx')
+            axs[1].plot(outTimeSeries,
+                        force_arr[:, 4],
+                        label=legends[i] + '_my')
+            axs[1].plot(outTimeSeries,
+                        force_arr[:, 5],
+                        label=legends[i] + '_mz')
 
-    if range_time != 'all':
-        axs[0].set_xlim(range_time)
-        axs[1].set_xlim(range_time)
-    if range_value != 'all':
-        axs[0].set_ylim(range_value)
-        axs[1].set_ylim(range_value)
+            # axs[0].plot(timei, fx, label=legends[i] + '_fx')
+            # axs[0].plot(timei, fy, label=legends[i] + '_fy')
+            # axs[0].plot(timei, fz, label=legends[i] + '_fz')
+            # axs[1].plot(timei, mx, label=legends[i] + '_mx')
+            # axs[1].plot(timei, my, label=legends[i] + '_my')
+            # axs[1].plot(timei, mz, label=legends[i] + '_mz')
 
-    axs[0].set_ylabel(r'N')
-    axs[1].set_ylabel(r'Nmm')
-    for ax in axs:
-        ax.set_xlabel(r't')
-        ax.label_outer()
+        if range_time != 'all':
+            axs[0].set_xlim(range_time)
+            axs[1].set_xlim(range_time)
+        if range_value != 'all':
+            axs[0].set_ylim(range_value)
+            axs[1].set_ylim(range_value)
 
-        ax.legend(loc='upper center',
-                  bbox_to_anchor=(legendx, legendy),
-                  ncol=len(legends),
-                  fontsize='small',
-                  frameon=False)
+        axs[0].set_ylabel(r'N')
+        axs[1].set_ylabel(r'Nmm')
+        for ax in axs:
+            ax.set_xlabel(r't')
+            ax.label_outer()
 
-    title = 'force'
-    out_image_file = os.path.join(image_out_path, title + '.svg')
-    fig.savefig(out_image_file)
-    # plt.show()
+            ax.legend(loc='upper center',
+                      bbox_to_anchor=(legendx, legendy),
+                      ncol=len(legends),
+                      fontsize='small',
+                      frameon=False)
 
-    force_arr_processed = np.array(force_arr_processed)
-    return force_arr_processed
+        title = 'balance forces'
+        case_out_dir = out_dir + '/' + exp_data_list[j]
+        image_out_path = case_out_dir + '/images'
+        out_image_file = os.path.join(image_out_path, title + '.svg')
+        fig.savefig(out_image_file)
+        # plt.show()
+
+        # ----Bouyacy average----
+        netZero = []
+        for i in range(2):
+            no_samples = len(zero_array[i])
+            averageZero = np.zeros(7)
+            for datai in zero_array[i]:
+                averageZero += datai
+
+            averageZero = averageZero / no_samples
+            netZero.append(averageZero)
+        bouyacyF = np.array(netZero[1]) - np.array(netZero[0])
+        bouyacyF_cases.append(bouyacyF)
+
+        # ----net aerodynamic force-----
+        netForce = force_arr_processed[1] - force_arr_processed[0]
+        netForce_cases.append(netForce)
+
+        # ----plotting filter frequency response----
+        b = filterParameter_cases[j][1]
+        a = filterParameter_cases[j][2]
+        if plot_frequencyResponse == 'yes':
+            # Plot the frequency response.
+            fig0, axs = plt.subplots(1, 1)
+            w, h = freqz(b, a, worN=8000)
+            axs.plot(0.5 * fs * w / np.pi, np.abs(h), 'b')
+            axs.plot(cutoff, 0.5 * np.sqrt(2), 'ko')
+            axs.axvline(cutoff, color='k')
+            axs.set_xlim(0, 0.5 * fs)
+            plt.title("Lowpass Filter Frequency Response")
+            axs.set_xlabel('Frequency [Hz]')
+            axs.grid()
+            # plt.show()
+
+            title = 'refquency respose'
+            out_image_file = os.path.join(image_out_path, title + '.svg')
+            fig0.savefig(out_image_file)
+
+    return bouyacyF_cases, netForce_cases
 
 
-def force_transform(Tweight, kinematics_arr, force_arr, outTimeSeries,
-                    show_range_kinematics, image_out_path):
+def force_transform(exp_data_list, kinematics_arr_cases, bouyacy_arr_cases,
+                    force_arr_cases, outTimeSeries_all, show_range_kinematics,
+                    out_dir):
     """
     function to plot cfd force coefficients results
     """
@@ -447,123 +527,154 @@ def force_transform(Tweight, kinematics_arr, force_arr, outTimeSeries,
         'figure.subplot.hspace': 0.1,
     })
 
-    mh_Buoyancy = Tweight[0] - Tweight[1]
-
     legendx = 0.5
     legendy = 1.15
+
+    noOfCases = len(exp_data_list)
 
     range_time = show_range_kinematics[0]
     range_value = show_range_kinematics[1]
 
-    fig1, axs = plt.subplots(3, 1)
+    transformed_aeroForce_cases = []
+    for i in range(noOfCases):
+        outTimeSeries = outTimeSeries_all[i]
+        fig1, axs = plt.subplots(3, 1)
 
-    axs[0].plot(outTimeSeries, kinematics_arr[:, 0], label='phi')
-    axs[0].plot(outTimeSeries, kinematics_arr[:, 1], label='theta')
+        kinematics_arr = kinematics_arr_cases[i]
+        force_arr = force_arr_cases[i]
+        b = bouyacy_arr_cases[i]
+        bouyacy_ldFrame = [b[2], b[1], b[3], b[5], b[4], b[6]]
 
-    axs[1].plot(outTimeSeries, force_arr[:, 0], label='net_fx')
-    axs[1].plot(outTimeSeries, force_arr[:, 1], label='net_fy')
-    axs[1].plot(outTimeSeries, force_arr[:, 2], label='net_fz')
-    axs[2].plot(outTimeSeries, force_arr[:, 3], label='net_mx')
-    axs[2].plot(outTimeSeries, force_arr[:, 4], label='net_my')
-    axs[2].plot(outTimeSeries, force_arr[:, 5], label='net_mz')
+        axs[0].plot(outTimeSeries, kinematics_arr[:, 0], label='phi')
+        axs[0].plot(outTimeSeries, kinematics_arr[:, 1], label='theta')
 
-    axs[0].set_ylabel(r'Angle (degrees)')
-    axs[1].set_ylabel(r'Force (N)')
-    axs[2].set_ylabel(r'Moment (Nmm)')
-    for ax in axs:
-        ax.set_xlabel(r't')
-        ax.label_outer()
+        axs[1].plot(outTimeSeries, force_arr[:, 0], label='net_fx')
+        axs[1].plot(outTimeSeries, force_arr[:, 1], label='net_fy')
+        axs[1].plot(outTimeSeries, force_arr[:, 2], label='net_fz')
+        axs[2].plot(outTimeSeries, force_arr[:, 3], label='net_mx')
+        axs[2].plot(outTimeSeries, force_arr[:, 4], label='net_my')
+        axs[2].plot(outTimeSeries, force_arr[:, 5], label='net_mz')
 
-        ax.legend(loc='upper center',
-                  bbox_to_anchor=(legendx, legendy),
-                  ncol=3,
-                  fontsize='small',
-                  frameon=False)
+        axs[0].set_ylabel(r'Angle (degrees)')
+        axs[1].set_ylabel(r'Force (N)')
+        axs[2].set_ylabel(r'Moment (Nmm)')
+        for ax in axs:
+            ax.set_xlabel(r't')
+            ax.label_outer()
 
-    title = 'net_aeroBuoyant_force_wingFixedFrame'
-    out_image_file = os.path.join(image_out_path, title + '.svg')
-    fig1.savefig(out_image_file)
+            ax.legend(loc='upper center',
+                      bbox_to_anchor=(legendx, legendy),
+                      ncol=3,
+                      fontsize='small',
+                      frameon=False)
 
-    force_arr_tranformed = []
-    #-----------------------------------------
-    flappingSpline = UnivariateSpline(outTimeSeries, kinematics_arr[:, 0], s=0)
-    phiDot = flappingSpline.derivative()
-    #-----------------------------------------
-    for i in range(len(outTimeSeries)):
-        thetai = kinematics_arr[i][1] * np.pi / 180
-        fxi = force_arr[i][0]
-        fyi = force_arr[i][1]
-        fzi = force_arr[i][2]
-        mxi = force_arr[i][3]
-        myi = force_arr[i][4]
-        mzi = force_arr[i][5]
+        title = 'net_aero_force_wingFixedFrame_withBouyacy'
+        case_out_dir = out_dir + '/' + exp_data_list[i]
+        image_out_path = case_out_dir + '/images'
+        out_image_file = os.path.join(image_out_path, title + '.svg')
+        fig1.savefig(out_image_file)
 
-        #--transform to lift-drag frame--
-        fhi = np.cos(thetai) * fyi + np.sin(thetai) * fxi
-        fvi = -1 * np.sin(thetai) * fyi + np.cos(thetai) * fxi
-        fsi = fzi
-        mhi = np.cos(thetai) * myi + np.sin(thetai) * mxi - mh_Buoyancy
-        mvi = -1 * np.sin(thetai) * myi + np.cos(thetai) * mxi
-        msi = mzi
+        force_arr_tranformed = []
+        # -----------------------------------------
+        flappingSpline = UnivariateSpline(outTimeSeries,
+                                          kinematics_arr[:, 0],
+                                          s=0)
+        phiDot = flappingSpline.derivative()
+        # -----------------------------------------
+        for i in range(len(outTimeSeries)):
+            thetai = kinematics_arr[i][1] * np.pi / 180
+            fxi = force_arr[i][0]
+            fyi = force_arr[i][1]
+            fzi = force_arr[i][2]
+            mxi = force_arr[i][3]
+            myi = force_arr[i][4]
+            mzi = force_arr[i][5]
 
-        #---remove direction of mv to resemble drag----
-        phiDoti = phiDot(outTimeSeries[i])
-        mvi = mvi * np.sign(phiDoti)
-        #----------------------------------------------
+            # --transform to lift-drag frame--
+            fhi = np.cos(thetai) * fyi + np.sin(
+                thetai) * fxi - bouyacy_ldFrame[0]
+            fvi = -1 * np.sin(thetai) * fyi + np.cos(
+                thetai) * fxi - bouyacy_ldFrame[1]
+            fsi = fzi - bouyacy_ldFrame[2]
+            mhi = np.cos(thetai) * myi + np.sin(
+                thetai) * mxi - bouyacy_ldFrame[3]
+            mvi = -1 * np.sin(thetai) * myi + np.cos(
+                thetai) * mxi - bouyacy_ldFrame[4]
+            msi = mzi - bouyacy_ldFrame[5]
 
-        force_arr_tranformed.append([fhi, fvi, fsi, mhi, mvi, msi])
+            # ---remove direction of fh, mv to resemble drag----
+            phiDoti = phiDot(outTimeSeries[i])
+            fhi = -1 * fhi * np.sign(phiDoti)
+            mvi = mvi * np.sign(phiDoti)
+            # ----------------------------------------------
 
-    force_arr_tranformed = np.array(force_arr_tranformed)
+            force_arr_tranformed.append([fhi, fvi, fsi, mhi, mvi, msi])
 
-    fig2, axs2 = plt.subplots(3, 1)
+        force_arr_tranformed = np.array(force_arr_tranformed)
 
-    axs2[0].plot(outTimeSeries, kinematics_arr[:, 0], label='phi')
-    axs2[0].plot(outTimeSeries, kinematics_arr[:, 1], label='theta')
+        fig2, axs2 = plt.subplots(3, 1)
 
-    axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 0], label='drag')
-    axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 1], label='lift')
-    axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 2], label='side_force')
-    axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 3], label='mh')
-    axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 4], label='mv')
-    axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 5], label='ms')
+        axs2[0].plot(outTimeSeries, kinematics_arr[:, 0], label='phi')
+        axs2[0].plot(outTimeSeries, kinematics_arr[:, 1], label='theta')
 
-    axs2[0].set_ylabel(r'Angle (degrees)')
-    axs2[1].set_ylabel(r'Force (N)')
-    axs2[2].set_ylabel(r'Moment (Nmm)')
-    for ax in axs2:
-        ax.set_xlabel(r't')
-        ax.label_outer()
+        axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 0], label='drag')
+        axs2[1].plot(outTimeSeries, force_arr_tranformed[:, 1], label='lift')
+        axs2[1].plot(outTimeSeries,
+                     force_arr_tranformed[:, 2],
+                     label='side_force')
+        axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 3], label='mh')
+        axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 4], label='mv')
+        axs2[2].plot(outTimeSeries, force_arr_tranformed[:, 5], label='ms')
 
-        ax.legend(loc='upper center',
-                  bbox_to_anchor=(legendx, legendy),
-                  ncol=3,
-                  fontsize='small',
-                  frameon=False)
+        axs2[0].set_ylabel(r'Angle (degrees)')
+        axs2[1].set_ylabel(r'Force (N)')
+        axs2[2].set_ylabel(r'Moment (Nmm)')
+        for ax in axs2:
+            ax.set_xlabel(r't')
+            ax.label_outer()
 
-    title = 'net_aerodForce_transformed'
-    out_image_file = os.path.join(image_out_path, title + '.svg')
-    fig2.savefig(out_image_file)
+            ax.legend(loc='upper center',
+                      bbox_to_anchor=(legendx, legendy),
+                      ncol=3,
+                      fontsize='small',
+                      frameon=False)
 
-    return force_arr_tranformed
+        title = 'net_aerodForce_transformed'
+        out_image_file = os.path.join(image_out_path, title + '.svg')
+        fig2.savefig(out_image_file)
+
+        transformed_aeroForce_cases.append(force_arr_tranformed)
+
+    return transformed_aeroForce_cases
 
 
-def write_force_array(outTimeSeries, force_arr_tranformed, data_out_path):
+def write_force_array(exp_data_list, outTimeSeries_all,
+                      transformed_aeroForce_cases, out_dir):
     """
     function to plot cfd force coefficients results
     """
-    data = []
-    for ti, fm_i in zip(outTimeSeries, force_arr_tranformed):
-        fm_str = []
-        for fm in fm_i:
-            fm_s = '{0:.10g}'.format(fm)
-            fm_str.append(fm_s)
+    noOfCases = len(exp_data_list)
 
-        datai = '{0:.10g}'.format(ti) + ',' + ','.join(fm_str)
-        data.append(datai)
+    for i in range(noOfCases):
+        outTimeSeries = outTimeSeries_all[i]
+        print(outTimeSeries)
+        force_arr_tranformed = transformed_aeroForce_cases[i]
+        case_out_dir = out_dir + '/' + exp_data_list[i]
+        data_out_path = case_out_dir + '/data'
 
-    save_file = data_out_path + '/net_aeroForce_transformed.csv'
+        data = []
+        for ti, fm_i in zip(outTimeSeries, force_arr_tranformed):
+            fm_str = []
+            for fm in fm_i:
+                fm_s = '{0:.10g}'.format(fm)
+                fm_str.append(fm_s)
 
-    with open(save_file, 'w') as f:
-        f.write("t(s),fx(N),fy(N),fz(N),mh(Nmm),mv(Nmm),ms(Nmm)\n")
-        for item in data:
-            f.write("%s\n" % item)
+            datai = '{0:.10g}'.format(ti) + ',' + ','.join(fm_str)
+            data.append(datai)
+
+        save_file = data_out_path + '/net_aeroForce_transformed.csv'
+
+        with open(save_file, 'w') as f:
+            f.write("t(s),fx(N),fy(N),fz(N),mh(Nmm),mv(Nmm),ms(Nmm)\n")
+            for item in data:
+                f.write("%s\n" % item)
