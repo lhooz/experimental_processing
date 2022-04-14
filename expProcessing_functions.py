@@ -12,8 +12,63 @@ from scipy.interpolate import UnivariateSpline
 from scipy.signal import butter, sosfilt, lfilter, freqz
 
 
-def read_exp_data(expDataFile):
+def read_motion(kinematics_file):
+    """read kinematics file"""
+    kinematics_arr = []
+    with open(kinematics_file) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        line_count = 0
+
+        for row in csv_reader:
+            if line_count < 1:
+                line_count += 1
+            else:
+                t = row[0]
+                # print(row)
+                flapping = row[1]
+                pitching = row[2]
+                kinematics_arr.append([
+                    float(t),
+                    float(flapping),
+                    float(pitching),
+                ])
+
+                line_count += 1
+
+    kinematics_arr = np.array(kinematics_arr)
+    return kinematics_arr
+
+
+def read_refUA(ref_file):
+    """read reference velocity and area file"""
+    refUA = []
+    with open(ref_file) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        line_count = 0
+
+        for row in csv_reader:
+            if line_count == 0:
+                Uref = row[1]
+                refUA.append(float(Uref))
+
+                line_count += 1
+            elif line_count == 1:
+                Aref = row[1]
+                refUA.append(float(Aref))
+
+                line_count += 1
+
+    refUA = np.array(refUA)
+    return refUA
+
+
+def read_exp_data(T, expDataFile):
     """read cfd results force coefficients data"""
+    #---remove final half cycle data---
+    initialTime = 20 * 64
+    endReadTime = initialTime + 4.5 * T * 1000
+    #----------------------------------
+
     expKinematics = []
     expForce = []
     zeroKinematics = []
@@ -56,22 +111,11 @@ def read_exp_data(expDataFile):
                 ])
 
                 #-------------------------------------
-                t_motor = float(row[2]) - tstart
-                # print(row)
-                motor_flapping = row[3]
-                motor_pitching = row[4]
                 expKinematics.append(
                     [t_motor,
                      float(motor_flapping),
                      float(motor_pitching)])
 
-                t_balance = float(row[5]) - tstart
-                fx = row[6]
-                fy = row[7]
-                fz = row[8]
-                mx = row[9]
-                my = row[10]
-                mz = row[11]
                 expForce.append([
                     t_balance,
                     float(fx),
@@ -89,10 +133,6 @@ def read_exp_data(expDataFile):
                 # print(row)
                 motor_flapping = row[3]
                 motor_pitching = row[4]
-                expKinematics.append(
-                    [t_motor,
-                     float(motor_flapping),
-                     float(motor_pitching)])
 
                 t_balance = float(row[5]) - tstart
                 fx = row[6]
@@ -101,15 +141,23 @@ def read_exp_data(expDataFile):
                 mx = row[9]
                 my = row[10]
                 mz = row[11]
-                expForce.append([
-                    t_balance,
-                    float(fx),
-                    float(fy),
-                    float(fz),
-                    float(mx),
-                    float(my),
-                    float(mz),
-                ])
+
+                if t_motor <= endReadTime:
+                    expKinematics.append([
+                        t_motor,
+                        float(motor_flapping),
+                        float(motor_pitching)
+                    ])
+
+                    expForce.append([
+                        t_balance,
+                        float(fx),
+                        float(fy),
+                        float(fz),
+                        float(mx),
+                        float(my),
+                        float(mz),
+                    ])
 
                 line_count += 1
 
@@ -190,7 +238,8 @@ def butter_lowpass_filter(data, cutoff, fs, order=5):
     return ysos
 
 
-def kinematics_processing(exp_data_list,
+def kinematics_processing(cycleTime_cases,
+                          exp_data_list,
                           air_data,
                           water_data,
                           gearRatio,
@@ -298,9 +347,8 @@ def kinematics_processing(exp_data_list,
 
         kinematics_arr_cases.append(averageKinematics)
 
-        cutoff = 5 * cutoffRatio / np.max(
-            averageKinematics[:,
-                              0])  # desired cutoff frequency of the filter, Hz
+        # desired cutoff frequency of the filter, Hz
+        cutoff = cutoffRatio / cycleTime_cases[i]
         # Get the filter coefficients so we can check its frequency response.
         sos, b, a = butter_lowpass(cutoff, fs, order=order)
         filterParameter_cases.append([cutoff, b, a])
@@ -657,7 +705,6 @@ def write_force_array(exp_data_list, outTimeSeries_all,
 
     for i in range(noOfCases):
         outTimeSeries = outTimeSeries_all[i]
-        print(outTimeSeries)
         force_arr_tranformed = transformed_aeroForce_cases[i]
         case_out_dir = out_dir + '/' + exp_data_list[i]
         data_out_path = case_out_dir + '/data'
