@@ -48,11 +48,21 @@ def read_refUA(ref_file):
 
         for row in csv_reader:
             if line_count == 0:
-                Uref = row[1]
-                refUA.append(float(Uref))
+                Ur2 = row[1]
+                refUA.append(float(Ur2))
 
                 line_count += 1
             elif line_count == 1:
+                Ur3 = row[1]
+                refUA.append(float(Ur3))
+
+                line_count += 1
+            elif line_count == 2:
+                r3 = row[1]
+                refUA.append(float(r3))
+
+                line_count += 1
+            elif line_count == 3:
                 Aref = row[1]
                 refUA.append(float(Aref))
 
@@ -64,10 +74,10 @@ def read_refUA(ref_file):
 
 def read_exp_data(T, expDataFile):
     """read cfd results force coefficients data"""
-    #---remove final half cycle data---
+    # ---remove final half cycle data---
     initialTime = 20 * 64
     endReadTime = initialTime + 4.5 * T * 1000
-    #----------------------------------
+    # ----------------------------------
 
     expKinematics = []
     expForce = []
@@ -110,7 +120,7 @@ def read_exp_data(T, expDataFile):
                     float(mz),
                 ])
 
-                #-------------------------------------
+                # -------------------------------------
                 expKinematics.append(
                     [t_motor,
                      float(motor_flapping),
@@ -125,7 +135,7 @@ def read_exp_data(T, expDataFile):
                     float(my),
                     float(mz),
                 ])
-                #-------------------------------------
+                # -------------------------------------
 
                 line_count += 1
             else:
@@ -204,10 +214,10 @@ def expDataAveraging(startTime, timeStep, timeScale, data_array):
     zeroForce_average = zeroForce_average / no_of_cases
     expForce_average = expForce_average / no_of_cases
 
-    #----time series---
+    # ----time series---
     endTime = expForce_average[-1, 0] / (1000 * timeScale)
     outTimeSeries = np.arange(startTime, endTime, timeStep)
-    #-----------------------------------------
+    # -----------------------------------------
 
     zero_out = [zeroKinematics_average, zeroForce_average]
     exp_out = [expKinematics_average, expForce_average]
@@ -345,7 +355,7 @@ def kinematics_processing(cycleTime_cases,
         fig.savefig(out_image_file)
         # plt.show()
 
-        kinematics_arr_cases.append(averageKinematics)
+        kinematics_arr_cases.append(np.array(averageKinematics))
 
         # desired cutoff frequency of the filter, Hz
         cutoff = cutoffRatio / cycleTime_cases[i]
@@ -371,7 +381,9 @@ def kinematics_processing(cycleTime_cases,
             out_image_file = os.path.join(image_out_path, title + '.svg')
             fig0.savefig(out_image_file)
 
-    kinematics_arr_cases = np.array(kinematics_arr_processed)
+        plt.close('all')
+        # plt.show()
+
     return filterParameter_cases, kinematics_arr_cases
 
 
@@ -417,8 +429,8 @@ def force_processing(exp_data_list,
     legends = ['air', 'water']
     bouyacyF_cases = []
     netForce_cases = []
-    fig, axs = plt.subplots(2, 1)
     for j in range(noOfCases):
+        fig, axs = plt.subplots(2, 1)
         cutoff = filterParameter_cases[j][0]
         zero_array = [air_data[j][0][1], water_data[j][0][1]]
         data_array = [air_data[j][1], water_data[j][1]]
@@ -542,11 +554,13 @@ def force_processing(exp_data_list,
             plt.title("Lowpass Filter Frequency Response")
             axs.set_xlabel('Frequency [Hz]')
             axs.grid()
-            # plt.show()
 
             title = 'refquency respose'
             out_image_file = os.path.join(image_out_path, title + '.svg')
             fig0.savefig(out_image_file)
+
+        plt.close('all')
+        # plt.show()
 
     return bouyacyF_cases, netForce_cases
 
@@ -693,13 +707,16 @@ def force_transform(exp_data_list, kinematics_arr_cases, bouyacy_arr_cases,
 
         transformed_aeroForce_cases.append(force_arr_tranformed)
 
+        plt.close('all')
+        # plt.show()
+
     return transformed_aeroForce_cases
 
 
 def write_force_array(exp_data_list, outTimeSeries_all,
                       transformed_aeroForce_cases, out_dir):
     """
-    function to plot cfd force coefficients results
+    function to write exp force results
     """
     noOfCases = len(exp_data_list)
 
@@ -723,5 +740,58 @@ def write_force_array(exp_data_list, outTimeSeries_all,
 
         with open(save_file, 'w') as f:
             f.write("t(s),fx(N),fy(N),fz(N),mh(Nmm),mv(Nmm),ms(Nmm)\n")
+            for item in data:
+                f.write("%s\n" % item)
+
+
+def write_coeff_array(coeff_ref_cases, cycleTime_cases, exp_data_list,
+                      outTimeSeries_all, transformed_aeroForce_cases, out_dir,
+                      medium):
+    """
+    function to write exp coefficients results
+    """
+    initialTime = 20 * 64 / 1000
+
+    noOfCases = len(exp_data_list)
+
+    if medium == 'water':
+        rho = 999.7
+        nu = 1.3065e-6
+    elif medium == 'air':
+        rho = 1.246
+        nu = 1.426e-5
+
+    for i in range(noOfCases):
+        outTimeSeries = outTimeSeries_all[i]
+        force_arr_tranformed = transformed_aeroForce_cases[i]
+        coeff_data = coeff_ref_cases[i]
+        T = cycleTime_cases[i]
+        case_out_dir = out_dir + '/' + exp_data_list[i]
+        data_out_path = case_out_dir + '/data'
+
+        f_scale = 0.5 * rho * coeff_data[0]**2 * coeff_data[3]
+        m_scale = 0.5 * rho * coeff_data[1]**2 * coeff_data[2] * coeff_data[
+            3] * 1000
+
+        data = []
+        for ti, fm_i in zip(outTimeSeries, force_arr_tranformed):
+            t_hat = (ti - initialTime) / T
+
+            cfm_i = [
+                fm_i[0] / f_scale, fm_i[1] / f_scale, fm_i[2] / f_scale,
+                fm_i[3] / m_scale, fm_i[4] / m_scale, fm_i[5] / m_scale
+            ]
+            fm_str = []
+            for fm in cfm_i:
+                fm_s = '{0:.10g}'.format(fm)
+                fm_str.append(fm_s)
+
+            datai = '{0:.10g}'.format(t_hat) + ',' + ','.join(fm_str)
+            data.append(datai)
+
+        save_file = data_out_path + '/aeroForce_coeff.csv'
+
+        with open(save_file, 'w') as f:
+            f.write("t_hat,cfx,cfy,cfz,cmh,cmv,cms\n")
             for item in data:
                 f.write("%s\n" % item)

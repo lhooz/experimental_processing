@@ -5,13 +5,13 @@ import shutil
 import numpy as np
 from expProcessing_functions import read_exp_data, expDataAveraging, butter_lowpass, butter_lowpass_filter
 from expProcessing_functions import kinematics_processing, force_processing, force_transform, write_force_array
-from expProcessing_functions import read_motion, read_refUA
+from expProcessing_functions import read_motion, read_refUA, write_coeff_array
 
 # -------------case file control----------
-phi = [90.0]
-Re = [3000.0]
-AR = [4.0]
-r1hat = [0.5]
+phi = [90, 140.0]
+Re = [5000.0]
+AR = [5.0]
+r1hat = [0.4, 0.5, 0.6]
 offset = [0.0]
 ptc = [1.5]
 #------------- Filter requirements-----------
@@ -59,6 +59,7 @@ if not os.path.exists(out_dir):
 data_file_all = [f.name for f in os.scandir(data_dir) if f.is_file()]
 ref_file_all = [f.name for f in os.scandir(refUA_dir) if f.is_file()]
 cycleTime_cases = []
+coeff_ref_cases = []
 outTimeSeries = []
 air_data_cases = []
 water_data_cases = []
@@ -80,6 +81,10 @@ for datai in exp_data_list:
             inKinematics = read_motion(kinematics_file)
             T = inKinematics[-1, 0]
             cycleTime_cases.append(T)
+        if refFile.startswith(datai) and refFile.endswith('.cf'):
+            cf_file = os.path.join(refUA_dir, refFile)
+            ref_data = read_refUA(cf_file)
+            coeff_ref_cases.append(ref_data)
 
     air_data_array = []
     water_data_array = []
@@ -124,3 +129,5 @@ transformed_aeroForce_cases = force_transform(exp_data_list,
 
 write_force_array(exp_data_list, outTimeSeries, transformed_aeroForce_cases,
                   out_dir)
+write_coeff_array(coeff_ref_cases, cycleTime_cases, exp_data_list,
+                  outTimeSeries, transformed_aeroForce_cases, out_dir, 'water')
