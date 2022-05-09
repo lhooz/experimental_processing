@@ -52,7 +52,7 @@ def read_processed_data(expDataFile):
 
 
 def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
-               timeScale):
+               timeScale, figureName, plotMode):
     """
     function to plot cfd force coefficients results
     """
@@ -61,13 +61,13 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         'mathtext.fontset': 'stix',
         'font.family': 'STIXGeneral',
         'font.size': 20,
-        'figure.figsize': (8, 30),
+        'figure.figsize': (20, 30),
         'lines.linewidth': 2.0,
         'lines.markersize': 0.1,
         'lines.markerfacecolor': 'white',
         'figure.dpi': 300,
-        'figure.subplot.left': 0.125,
-        'figure.subplot.right': 0.95,
+        'figure.subplot.left': 0.35,
+        'figure.subplot.right': 0.65,
         'figure.subplot.top': 0.7,
         'figure.subplot.bottom': 0.1,
         'figure.subplot.wspace': 0.2,
@@ -163,42 +163,51 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
             cmv_4th.append(cmv_spl_4th(ti))
             cmv_wake.append(cmv_spl_4th(ti) - cmv_spl_1st(ti))
 
-        axs[0].plot(timeSeries / timeScale, cl_1st, label=legends[i] + '_1st')
+        if plotMode == 'wake':
+            axs[0].plot(timeSeries / timeScale,
+                        cl_1st,
+                        label=legends[i] + '_1st')
+            axs[0].plot(timeSeries / timeScale,
+                        cl_wake,
+                        label=legends[i] + '_wake')
+
+            axs[1].plot(timeSeries / timeScale,
+                        cd_1st,
+                        label=legends[i] + '_1st')
+            axs[1].plot(timeSeries / timeScale,
+                        cd_wake,
+                        label=legends[i] + '_wake')
+
+            axs[2].plot(timeSeries / timeScale,
+                        cmh_1st,
+                        label=legends[i] + '_1st')
+            axs[2].plot(timeSeries / timeScale,
+                        cl_wake,
+                        label=legends[i] + '_wake')
+
+            axs[3].plot(timeSeries / timeScale,
+                        cmv_1st,
+                        label=legends[i] + '_1st')
+            axs[3].plot(timeSeries / timeScale,
+                        cmv_wake,
+                        label=legends[i] + '_wake')
+
         axs[0].plot(timeSeries / timeScale,
                     cl_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[0].plot(timeSeries / timeScale,
-                    cl_wake,
-                    label=legends[i] + '_wake')
-
-        axs[1].plot(timeSeries / timeScale, cd_1st, label=legends[i] + '_1st')
         axs[1].plot(timeSeries / timeScale,
                     cd_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[1].plot(timeSeries / timeScale,
-                    cd_wake,
-                    label=legends[i] + '_wake')
-
-        axs[2].plot(timeSeries / timeScale, cmh_1st, label=legends[i] + '_1st')
         axs[2].plot(timeSeries / timeScale,
                     cmh_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[2].plot(timeSeries / timeScale,
-                    cl_wake,
-                    label=legends[i] + '_wake')
-
-        axs[3].plot(timeSeries / timeScale, cmv_1st, label=legends[i] + '_1st')
         axs[3].plot(timeSeries / timeScale,
                     cmv_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[3].plot(timeSeries / timeScale,
-                    cmv_wake,
-                    label=legends[i] + '_wake')
-
         mcl_1st = cl_spl_1st.integral(time_to_plot[0], time_to_plot[1])
         mcl_4th = cl_spl_1st.integral(time_to_plot[0], time_to_plot[1])
         mcl_wake = mcl_4th - mcl_1st
@@ -231,7 +240,7 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         mcmv_4th_arr.append(mcmv_4th)
         mcmv_wake_arr.append(mcmv_wake)
 
-        with open('meanForceCoeffs.dat', 'w') as f:
+        with open('meanForceCoeffs_' + figureName + '.dat', 'w') as f:
             f.write(
                 "case,mcl_1st,mcl_4th,mcl_wake,mcd_1st,mcd_4th,mcd_wake,mcmh_1st,mcmh_4th,mcmh_wake,mcmv_1st,mcmv_4th,mcmv_wake\n"
             )
@@ -275,7 +284,7 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
                   fontsize='small',
                   frameon=False)
 
-    title = 'experimental force coefficients'
+    title = 'experimental force coefficients_' + figureName
     out_image_file = os.path.join(out_dir, title + '.svg')
     fig.savefig(out_image_file)
     # plt.show()

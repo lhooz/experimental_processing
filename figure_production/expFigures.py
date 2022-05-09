@@ -6,12 +6,15 @@ import numpy as np
 from expPlot_functions import read_processed_data, cf_plotter
 
 # -------------case file control----------
-phi = [140.0]
-Re = [3000.0]
-AR = [5.0]
+phi = [140]
+Re = [3000]
+AR = [4]
 r1hat = [0.5]
 offset = [0.0]
-waveform = ['trapzoidal']
+waveform = ['sinu']
+# plotMode = 'planform'
+plotMode = 'wake'
+figureName = 'wake_effect_sinu'
 #------------------------------------------
 # ftc = [0.97]
 # ptc = [1.5]
@@ -31,10 +34,10 @@ for phii in phi:
 # -------------time series control----------
 time_to_plot = [0, 1]
 # ------------------------------------------
-range_cl = [-4, 8]
-range_cd = [-4, 8]
-range_cmh = [-4, 8]
-range_cmv = [-4, 8]
+range_cl = [-0.5, 4]
+range_cd = [-2.5, 6.5]
+range_cmh = [-1, 5]
+range_cmv = [-1.5, 6.5]
 show_range = [range_cl, range_cd, range_cmh, range_cmv]
 timeScale = 1.0
 # ------------------------------------------
@@ -58,4 +61,5 @@ for wave in waveform:
                 data_array.append(cfData)
                 legends.append(datai + '_' + wave)
 
-cf_plotter(data_array, legends, time_to_plot, show_range, out_dir, timeScale)
+cf_plotter(data_array, legends, time_to_plot, show_range, out_dir, timeScale,
+           figureName, plotMode)
