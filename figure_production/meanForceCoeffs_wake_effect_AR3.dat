@@ -1,2 +1,2 @@
 case,mcl_1st,mcl_4th,mcl_wake,mcd_1st,mcd_4th,mcd_wake,mcmh_1st,mcmh_4th,mcmh_wake,mcmv_1st,mcmv_4th,mcmv_wake
-phi140.0__ar3.0_ofs0.0_r1h0.5__Re3000.0_trapzoidal,1.4843035,1.4843035,0,1.9647405,1.9647405,0,1.5340089,1.5340089,0,2.2441556,2.2441556,0
+phi140.0__ar4.0_ofs0.0_r1h0.6__Re3000.0_trapzoidal,1.5440951,1.5440951,0,1.9216869,1.9216869,0,1.5822253,1.5822253,0,2.2024359,2.2024359,0

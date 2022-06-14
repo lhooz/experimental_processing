@@ -33,6 +33,8 @@ def read_processed_data(expDataFile):
                 cmh = row[4]
                 cmv = row[5]
                 cms = row[6]
+                phi = row[7]
+                theta = row[8]
                 expForceCoeff.append([
                     float(t_hat),
                     float(cd),
@@ -41,6 +43,8 @@ def read_processed_data(expDataFile):
                     float(cmh),
                     float(cmv),
                     float(cms),
+                    float(phi),
+                    float(theta),
                 ])
                 # -------------------------------------
 
@@ -61,7 +65,8 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         'mathtext.fontset': 'stix',
         'font.family': 'STIXGeneral',
         'font.size': 20,
-        'figure.figsize': (20, 30),
+        'figure.figsize': (15, 30),
+        # 'figure.figsize': (40, 30),
         'lines.linewidth': 2.0,
         'lines.markersize': 0.1,
         'lines.markerfacecolor': 'white',
@@ -71,10 +76,10 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         'figure.subplot.top': 0.7,
         'figure.subplot.bottom': 0.1,
         'figure.subplot.wspace': 0.2,
-        'figure.subplot.hspace': 0.2,
+        'figure.subplot.hspace': 0.25,
     })
     plot_cycle = 4
-    legendx = 0.1
+    legendx = 0.4
     legendy = 3.2
 
     cf_array = data_array
@@ -84,7 +89,7 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
     range_cmv = show_range[3]
 
     timeSeries = np.linspace(time_to_plot[0], time_to_plot[1], 1000)
-    fig, axs = plt.subplots(4, 1)
+    fig, axs = plt.subplots(5, 1)
     mcl_1st_arr = []
     mcl_4th_arr = []
     mcl_wake_arr = []
@@ -102,6 +107,9 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
     mcmv_wake_arr = []
 
     for i in range(len(legends)):
+        phi_spl = UnivariateSpline(cf_array[i][:, 0], cf_array[i][:, 7], s=0)
+        theta_spl = UnivariateSpline(cf_array[i][:, 0], cf_array[i][:, 8], s=0)
+
         cl_spl_1st = UnivariateSpline(cf_array[i][:, 0],
                                       cf_array[i][:, 2],
                                       s=0)
@@ -130,6 +138,9 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
                                        cf_array[i][:, 5],
                                        s=0)
 
+        phi = []
+        theta = []
+
         cl_1st = []
         cl_4th = []
         cl_wake = []
@@ -147,6 +158,9 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         cmv_wake = []
 
         for ti in timeSeries:
+            phi.append(phi_spl(ti))
+            theta.append(theta_spl(ti))
+
             cl_1st.append(cl_spl_1st(ti))
             cl_4th.append(cl_spl_4th(ti))
             cl_wake.append(cl_spl_4th(ti) - cl_spl_1st(ti))
@@ -164,47 +178,49 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
             cmv_wake.append(cmv_spl_4th(ti) - cmv_spl_1st(ti))
 
         if plotMode == 'wake':
-            axs[0].plot(timeSeries / timeScale,
+            axs[1].plot(timeSeries / timeScale,
                         cl_1st,
                         label=legends[i] + '_1st')
-            axs[0].plot(timeSeries / timeScale,
+            axs[1].plot(timeSeries / timeScale,
                         cl_wake,
                         label=legends[i] + '_wake')
 
-            axs[1].plot(timeSeries / timeScale,
+            axs[2].plot(timeSeries / timeScale,
                         cd_1st,
                         label=legends[i] + '_1st')
-            axs[1].plot(timeSeries / timeScale,
+            axs[2].plot(timeSeries / timeScale,
                         cd_wake,
                         label=legends[i] + '_wake')
 
-            axs[2].plot(timeSeries / timeScale,
+            axs[3].plot(timeSeries / timeScale,
                         cmh_1st,
                         label=legends[i] + '_1st')
-            axs[2].plot(timeSeries / timeScale,
+            axs[3].plot(timeSeries / timeScale,
                         cl_wake,
                         label=legends[i] + '_wake')
 
-            axs[3].plot(timeSeries / timeScale,
+            axs[4].plot(timeSeries / timeScale,
                         cmv_1st,
                         label=legends[i] + '_1st')
-            axs[3].plot(timeSeries / timeScale,
+            axs[4].plot(timeSeries / timeScale,
                         cmv_wake,
                         label=legends[i] + '_wake')
 
-        axs[0].plot(timeSeries / timeScale,
+        axs[0].plot(timeSeries / timeScale, phi, label=legends[i] + '_phi')
+        axs[0].plot(timeSeries / timeScale, theta, label=legends[i] + '_theta')
+        axs[1].plot(timeSeries / timeScale,
                     cl_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[1].plot(timeSeries / timeScale,
+        axs[2].plot(timeSeries / timeScale,
                     cd_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[2].plot(timeSeries / timeScale,
+        axs[3].plot(timeSeries / timeScale,
                     cmh_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        axs[3].plot(timeSeries / timeScale,
+        axs[4].plot(timeSeries / timeScale,
                     cmv_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
@@ -262,15 +278,18 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         axs[1].set_xlim(time_to_plot)
         axs[2].set_xlim(time_to_plot)
         axs[3].set_xlim(time_to_plot)
+        axs[4].set_xlim(time_to_plot)
     if range_cl != 'all':
-        axs[0].set_ylim(range_cl)
-        axs[1].set_ylim(range_cd)
-        axs[2].set_ylim(range_cmh)
-        axs[3].set_ylim(range_cmv)
+        axs[1].set_ylim(range_cl)
+        axs[2].set_ylim(range_cd)
+        axs[3].set_ylim(range_cmh)
+        axs[4].set_ylim(range_cmv)
 
     for ax in axs:
         ax.axhline(y=0, color='k', linestyle='-.', linewidth=0.5)
-        ax.axvline(x=4.5, color='k', linestyle='-.', linewidth=0.5)
+        ax.axvline(x=0.5, color='k', linestyle='-.', linewidth=0.5)
+        ax.axvline(x=1.5, color='k', linestyle='-.', linewidth=0.5)
+        ax.axvline(x=2.5, color='k', linestyle='-.', linewidth=0.5)
         ax.set_xlabel(r'$\^t$')
 
     axs[0].set_ylabel(r'$CL$')
@@ -279,6 +298,11 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
     axs[3].set_ylabel(r'$Cmv$')
 
     axs[0].legend(loc='upper center',
+                  bbox_to_anchor=(legendx, legendy),
+                  ncol=2,
+                  fontsize='small',
+                  frameon=False)
+    axs[1].legend(loc='upper center',
                   bbox_to_anchor=(legendx, legendy),
                   ncol=2,
                   fontsize='small',

@@ -11,10 +11,12 @@ Re = [3000]
 AR = [4]
 r1hat = [0.5]
 offset = [0.0]
-waveform = ['sinu']
+# waveform = ['sinu']
+waveform = ['trapzoidal']
 # plotMode = 'planform'
 plotMode = 'wake'
-figureName = 'wake_effect_sinu'
+# figureName = 'Re_effect'
+figureName = 'wake_effect_AR3'
 #------------------------------------------
 # ftc = [0.97]
 # ptc = [1.5]
@@ -32,7 +34,7 @@ for phii in phi:
                                     r1h) + '__Re' + '{0:.1f}'.format(re)
                     exp_data_list.append(exp_data_name)
 # -------------time series control----------
-time_to_plot = [0, 1]
+time_to_plot = [0, 1.0]
 # ------------------------------------------
 range_cl = [-0.5, 4]
 range_cd = [-2.5, 6.5]
