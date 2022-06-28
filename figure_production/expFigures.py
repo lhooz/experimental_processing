@@ -6,7 +6,7 @@ import numpy as np
 from expPlot_functions import read_processed_data, cf_plotter
 
 # -------------case file control----------
-phi = [90]
+phi = [90, 140]
 Re = [5000]
 AR = [5]
 r1hat = [0.4, 0.5, 0.6]
@@ -15,7 +15,7 @@ offset = [0.0]
 waveform = ['sinu', 'trapzoidal']
 # plotMode = 'planform'
 plotMode = 'wake'
-figureName = plotMode + '_effect_' + 'test'
+figureName = plotMode + '_effect_' + 'allRe5000'
 #------------------------------------------
 # ftc = [0.97]
 # ptc = [1.5]

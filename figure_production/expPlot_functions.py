@@ -93,18 +93,22 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
     mcl_1st_arr = []
     mcl_4th_arr = []
     mcl_wake_arr = []
+    mcl_wake_mid_arr = []
 
     mcd_1st_arr = []
     mcd_4th_arr = []
     mcd_wake_arr = []
+    mcd_wake_mid_arr = []
 
     mcmh_1st_arr = []
     mcmh_4th_arr = []
     mcmh_wake_arr = []
+    mcmh_wake_mid_arr = []
 
     mcmv_1st_arr = []
     mcmv_4th_arr = []
     mcmv_wake_arr = []
+    mcmv_wake_mid_arr = []
 
     for i in range(len(legends)):
         phi_spl = UnivariateSpline(cf_array[i][:, 0], cf_array[i][:, 7], s=0)
@@ -224,54 +228,81 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
                     cmv_4th,
                     label=legends[i] + '_' + '{0:0g}'.format(plot_cycle) +
                     'th')
-        mcl_1st = cl_spl_1st.integral(time_to_plot[0], time_to_plot[1])
-        mcl_4th = cl_spl_1st.integral(time_to_plot[0], time_to_plot[1])
+        #------------half stroke averages-----------
+        mcl_1st = cl_spl_1st.integral(0, 0.5)
+        mcl_4th = cl_spl_4th.integral(0, 0.5)
         mcl_wake = mcl_4th - mcl_1st
 
-        mcd_1st = cd_spl_1st.integral(time_to_plot[0], time_to_plot[1])
-        mcd_4th = cd_spl_1st.integral(time_to_plot[0], time_to_plot[1])
+        mcd_1st = cd_spl_1st.integral(0, 0.5)
+        mcd_4th = cd_spl_4th.integral(0, 0.5)
         mcd_wake = mcd_4th - mcd_1st
 
-        mcmh_1st = cmh_spl_1st.integral(time_to_plot[0], time_to_plot[1])
-        mcmh_4th = cmh_spl_1st.integral(time_to_plot[0], time_to_plot[1])
+        mcmh_1st = cmh_spl_1st.integral(0, 0.5)
+        mcmh_4th = cmh_spl_4th.integral(0, 0.5)
         mcmh_wake = mcmh_4th - mcmh_1st
 
-        mcmv_1st = cmv_spl_1st.integral(time_to_plot[0], time_to_plot[1])
-        mcmv_4th = cmv_spl_1st.integral(time_to_plot[0], time_to_plot[1])
+        mcmv_1st = cmv_spl_1st.integral(0, 0.5)
+        mcmv_4th = cmv_spl_4th.integral(0, 0.5)
         mcmv_wake = mcmv_4th - mcmv_1st
+
+        #---------mid half stroke averages-----------
+        mcl_1st_m = cl_spl_1st.integral(0, 0.25)
+        mcl_4th_m = cl_spl_4th.integral(0, 0.25)
+        mcl_wake_m = mcl_4th_m - mcl_1st_m
+
+        mcd_1st_m = cd_spl_1st.integral(0, 0.25)
+        mcd_4th_m = cd_spl_4th.integral(0, 0.25)
+        mcd_wake_m = mcd_4th_m - mcd_1st_m
+
+        mcmh_1st_m = cmh_spl_1st.integral(0, 0.25)
+        mcmh_4th_m = cmh_spl_4th.integral(0, 0.25)
+        mcmh_wake_m = mcmh_4th_m - mcmh_1st_m
+
+        mcmv_1st_m = cmv_spl_1st.integral(0, 0.25)
+        mcmv_4th_m = cmv_spl_4th.integral(0, 0.25)
+        mcmv_wake_m = mcmv_4th_m - mcmv_1st_m
+        #-------------------------------------------------------------
 
         mcl_1st_arr.append(mcl_1st)
         mcl_4th_arr.append(mcl_4th)
         mcl_wake_arr.append(mcl_wake)
+        mcl_wake_mid_arr.append(mcl_wake_m)
 
         mcd_1st_arr.append(mcd_1st)
         mcd_4th_arr.append(mcd_4th)
         mcd_wake_arr.append(mcd_wake)
+        mcd_wake_mid_arr.append(mcd_wake_m)
 
         mcmh_1st_arr.append(mcmh_1st)
         mcmh_4th_arr.append(mcmh_4th)
         mcmh_wake_arr.append(mcmh_wake)
+        mcmh_wake_mid_arr.append(mcmh_wake_m)
 
         mcmv_1st_arr.append(mcmv_1st)
         mcmv_4th_arr.append(mcmv_4th)
         mcmv_wake_arr.append(mcmv_wake)
+        mcmv_wake_mid_arr.append(mcmv_wake_m)
 
         with open('meanForceCoeffs_' + figureName + '.dat', 'w') as f:
             f.write(
-                "case,mcl_1st,mcl_4th,mcl_wake,mcd_1st,mcd_4th,mcd_wake,mcmh_1st,mcmh_4th,mcmh_wake,mcmv_1st,mcmv_4th,mcmv_wake\n"
+                "case,mcl_1st,mcl_4th,mcl_wake,mcl_wake_mid,mcd_1st,mcd_4th,mcd_wake,mcd_wake_mid,mcmh_1st,mcmh_4th,mcmh_wake,mcmh_wake_mid,mcmv_1st,mcmv_4th,mcmv_wake,mcmv_wake_mid\n"
             )
-            for cl1, cl4, clw, cd1, cd4, cdw, cmh1, cmh4, cmhw, cmv1, cmv4, cmvw, cf_lgd in zip(
-                    mcl_1st_arr, mcl_4th_arr, mcl_wake_arr, mcd_1st_arr,
-                    mcd_4th_arr, mcd_wake_arr, mcmh_1st_arr, mcmh_4th_arr,
-                    mcmh_wake_arr, mcmv_1st_arr, mcmv_4th_arr, mcmv_wake_arr,
-                    legends):
-                f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %
-                        (cf_lgd, '{0:.8g}'.format(cl1), '{0:.8g}'.format(cl4),
-                         '{0:.8g}'.format(clw), '{0:.8g}'.format(cd1),
-                         '{0:.8g}'.format(cd4), '{0:.8g}'.format(cdw),
-                         '{0:.8g}'.format(cmh1), '{0:.8g}'.format(cmh4),
-                         '{0:.8g}'.format(cmhw), '{0:.8g}'.format(cmv1),
-                         '{0:.8g}'.format(cmv4), '{0:.8g}'.format(cmvw)))
+            for cl1, cl4, clw, clw_m, cd1, cd4, cdw, cdw_m, cmh1, cmh4, cmhw, cmhw_m, cmv1, cmv4, cmvw, cmvw_m, cf_lgd in zip(
+                    mcl_1st_arr, mcl_4th_arr, mcl_wake_arr, mcl_wake_mid_arr,
+                    mcd_1st_arr, mcd_4th_arr, mcd_wake_arr, mcl_wake_mid_arr,
+                    mcmh_1st_arr, mcmh_4th_arr, mcmh_wake_arr,
+                    mcmh_wake_mid_arr, mcmv_1st_arr, mcmv_4th_arr,
+                    mcmv_wake_arr, mcmv_wake_mid_arr, legends):
+                f.write(
+                    "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %
+                    (cf_lgd, '{0:.8g}'.format(cl1), '{0:.8g}'.format(cl4),
+                     '{0:.8g}'.format(clw), '{0:.8g}'.format(clw_m),
+                     '{0:.8g}'.format(cd1), '{0:.8g}'.format(cd4),
+                     '{0:.8g}'.format(cdw), '{0:.8g}'.format(cdw_m),
+                     '{0:.8g}'.format(cmh1), '{0:.8g}'.format(cmh4),
+                     '{0:.8g}'.format(cmhw), '{0:.8g}'.format(cmhw_m),
+                     '{0:.8g}'.format(cmv1), '{0:.8g}'.format(cmv4),
+                     '{0:.8g}'.format(cmvw), '{0:.8g}'.format(cmvw_m)))
 
     if time_to_plot != 'all':
         axs[0].set_xlim(time_to_plot)
