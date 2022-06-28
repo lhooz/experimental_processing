@@ -6,17 +6,16 @@ import numpy as np
 from expPlot_functions import read_processed_data, cf_plotter
 
 # -------------case file control----------
-phi = [140]
-Re = [3000]
-AR = [4]
-r1hat = [0.5]
+phi = [90]
+Re = [5000]
+AR = [5]
+r1hat = [0.4, 0.5, 0.6]
 offset = [0.0]
 # waveform = ['sinu']
-waveform = ['trapzoidal']
+waveform = ['sinu', 'trapzoidal']
 # plotMode = 'planform'
 plotMode = 'wake'
-# figureName = 'Re_effect'
-figureName = 'wake_effect_AR3'
+figureName = plotMode + '_effect_' + 'test'
 #------------------------------------------
 # ftc = [0.97]
 # ptc = [1.5]
@@ -34,12 +33,12 @@ for phii in phi:
                                     r1h) + '__Re' + '{0:.1f}'.format(re)
                     exp_data_list.append(exp_data_name)
 # -------------time series control----------
-time_to_plot = [0, 1.0]
+time_to_plot = [0, 1]
 # ------------------------------------------
 range_cl = [-0.5, 4]
 range_cd = [-2.5, 6.5]
 range_cmh = [-1, 5]
-range_cmv = [-1.5, 6.5]
+range_cmv = [-1.5, 6]
 show_range = [range_cl, range_cd, range_cmh, range_cmv]
 timeScale = 1.0
 # ------------------------------------------

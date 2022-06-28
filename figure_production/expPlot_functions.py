@@ -292,10 +292,11 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
         ax.axvline(x=2.5, color='k', linestyle='-.', linewidth=0.5)
         ax.set_xlabel(r'$\^t$')
 
-    axs[0].set_ylabel(r'$CL$')
-    axs[1].set_ylabel(r'$CD$')
-    axs[2].set_ylabel(r'$Cmh$')
-    axs[3].set_ylabel(r'$Cmv$')
+    axs[0].set_ylabel(r'Kinematics')
+    axs[1].set_ylabel(r'$C_L$')
+    axs[2].set_ylabel(r'$C_D$')
+    axs[3].set_ylabel(r'$Cmh$')
+    axs[4].set_ylabel(r'$Cmv$')
 
     axs[0].legend(loc='upper center',
                   bbox_to_anchor=(legendx, legendy),
@@ -308,7 +309,7 @@ def cf_plotter(data_array, legends, time_to_plot, show_range, out_dir,
                   fontsize='small',
                   frameon=False)
 
-    title = 'experimental force coefficients_' + figureName
+    title = figureName
     out_image_file = os.path.join(out_dir, title + '.svg')
     fig.savefig(out_image_file)
     # plt.show()
